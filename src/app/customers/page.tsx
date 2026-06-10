@@ -55,6 +55,7 @@ export default function CustomersPage() {
 
     return (
       customer.customerName?.toLowerCase().includes(search) ||
+      customer.address?.toLowerCase().includes(search) ||
       customer.city?.toLowerCase().includes(search) ||
       customer.phone?.toLowerCase().includes(search) ||
       customer.email?.toLowerCase().includes(search)
@@ -103,6 +104,7 @@ export default function CustomersPage() {
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Address</th>
                     <th className="px-4 py-3">City</th>
                     <th className="px-4 py-3">State</th>
                     <th className="px-4 py-3">Status</th>
@@ -116,13 +118,21 @@ export default function CustomersPage() {
                       className="border-b border-slate-800 last:border-b-0"
                     >
                       <td className="px-4 py-4 font-medium text-white">
-                        {customer.customerName}
+                        <Link
+                          href={`/customers/${customer.id}`}
+                          className="text-white hover:text-blue-400"
+                        >
+                          {customer.customerName}
+                        </Link>
                       </td>
                       <td className="px-4 py-4 text-slate-300">
                         {customer.phone || "—"}
                       </td>
                       <td className="px-4 py-4 text-slate-300">
                         {customer.email || "—"}
+                      </td>
+                      <td className="px-4 py-4 text-slate-300">
+                        {customer.address}
                       </td>
                       <td className="px-4 py-4 text-slate-300">
                         {customer.city}
