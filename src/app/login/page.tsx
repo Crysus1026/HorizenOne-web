@@ -14,9 +14,13 @@ export default function LoginPage() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
 
-    await signInWithEmailAndPassword(auth, email, password);
-
-    router.push("/dashboard");
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      router.push("/dashboard");
+    } catch (error) {
+      console.error(error);
+      alert("Login failed. Check your email and password.");
+    }
   }
 
   return (
