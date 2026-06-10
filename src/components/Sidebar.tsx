@@ -6,6 +6,7 @@ const navItems = [
   { label: "Calendar", href: "/calendar" },
   { label: "Work Orders", href: "/work-orders" },
   { label: "Customers", href: "/customers" },
+  { label: "Service Types", href: "/admin/service-types" },
   { label: "Admin", href: "/admin" },
 ];
 
