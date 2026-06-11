@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 type Customer = {
   id: string;
   customerName: string;
+  accountNumber?: string;
   address: string;
   city: string;
   state: string;
@@ -102,6 +103,7 @@ export default function CustomersPage() {
                 <thead className="border-b border-slate-800 text-slate-400">
                   <tr>
                     <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Account #</th>
                     <th className="px-4 py-3">Phone</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Address</th>
@@ -124,6 +126,9 @@ export default function CustomersPage() {
                         >
                           {customer.customerName}
                         </Link>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-300">
+                        {customer.accountNumber || "—"}
                       </td>
                       <td className="px-4 py-4 text-slate-300">
                         {customer.phone || "—"}

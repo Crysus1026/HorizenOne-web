@@ -1,11 +1,32 @@
 "use client";
 
-import AppShell from "@/components/AppShell";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+type WorkOrder = {
+  workOrderNumber?: string;
+  companyId: string;
+  customerId: string;
+  customerName: string;
+  serviceTypeId: string;
+  serviceTypeName: string;
+  serviceDurationMinutes: number;
+  scheduledDate: string;
+  timeWindow: string;
+  assignedTechnicianId?: string;
+  assignedTechnicianName?: string;
+  status: string;
+  notes?: string;
+  isActive: boolean;
+};
 
 export default function WorkOrderDetailPage() {
   const params = useParams();
@@ -13,201 +34,236 @@ export default function WorkOrderDetailPage() {
 
   const workOrderId = params.id as string;
 
-  const [customerName, setCustomerName] = useState("");
-  const [serviceTypeName, setServiceTypeName] = useState("");
-  const [scheduledDate, setScheduledDate] = useState("");
-  const [timeWindow, setTimeWindow] = useState("");
-  const [status, setStatus] = useState("Scheduled");
-  const [notes, setNotes] = useState("");
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const displayWorkOrderNumber =
+  workOrder?.workOrderNumber || `WO-${workOrderId.slice(0, 8).toUpperCase()}`;
 
   useEffect(() => {
     async function loadWorkOrder() {
-      try {
-        const workOrderRef = doc(db, "workOrders", workOrderId);
-        const workOrderSnap = await getDoc(workOrderRef);
+      if (!workOrderId) return;
 
-        if (!workOrderSnap.exists()) {
-          setError("Work order not found.");
+      try {
+        const ref = doc(db, "workOrders", workOrderId);
+        const snap = await getDoc(ref);
+
+        if (!snap.exists()) {
+          setWorkOrder(null);
           return;
         }
 
-        const data = workOrderSnap.data();
-
-        setCustomerName(data.customerName || "");
-        setServiceTypeName(data.serviceTypeName || "");
-        setScheduledDate(data.scheduledDate || "");
-        setTimeWindow(data.timeWindow || "");
-        setStatus(data.status || "Scheduled");
-        setNotes(data.notes || "");
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load work order.");
+        setWorkOrder(snap.data() as WorkOrder);
+      } catch (error) {
+        console.error("Error loading work order:", error);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     }
 
-    if (workOrderId) {
-      loadWorkOrder();
-    }
+    loadWorkOrder();
   }, [workOrderId]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function updateStatus(newStatus: string) {
+    if (!workOrderId) return;
 
-    setIsSaving(true);
-    setError("");
+    setSaving(true);
 
     try {
-      const workOrderRef = doc(db, "workOrders", workOrderId);
+      const ref = doc(db, "workOrders", workOrderId);
 
-      await updateDoc(workOrderRef, {
-        scheduledDate,
-        timeWindow,
-        status,
-        notes,
+      await updateDoc(ref, {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+
+      setWorkOrder((prev) =>
+        prev ? { ...prev, status: newStatus } : prev
+      );
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("Failed to update work order status.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deactivateWorkOrder() {
+    if (!workOrderId) return;
+
+    const confirmDelete = window.confirm(
+      "Are you sure you want to deactivate this work order?"
+    );
+
+    if (!confirmDelete) return;
+
+    setSaving(true);
+
+    try {
+      const ref = doc(db, "workOrders", workOrderId);
+
+      await updateDoc(ref, {
+        isActive: false,
         updatedAt: serverTimestamp(),
       });
 
       router.push("/work-orders");
-    } catch (err) {
-      console.error(err);
-      setError("Unable to update work order.");
+    } catch (error) {
+      console.error("Error deactivating work order:", error);
+      alert("Failed to deactivate work order.");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <AppShell>
-        <div className="p-8 text-slate-400">Loading work order...</div>
-      </AppShell>
+      <div className="p-6 text-white">
+        Loading work order...
+      </div>
+    );
+  }
+
+  if (!workOrder) {
+    return (
+      <div className="p-6 text-white">
+        <h1 className="text-2xl font-bold">Work Order Not Found</h1>
+        <Link
+          href="/work-orders"
+          className="mt-4 inline-block text-blue-400 hover:text-blue-300"
+        >
+          Back to Work Orders
+        </Link>
+      </div>
     );
   }
 
   return (
-    <AppShell>
-      <div className="p-8">
-        <div className="mb-8">
-          <Link
-            href="/work-orders"
-            className="text-sm text-slate-400 hover:text-white"
-          >
-            ← Back to Work Orders
-          </Link>
-
-          <h1 className="mt-4 text-3xl font-bold">Work Order Detail</h1>
-          <p className="mt-2 text-slate-400">
-            View and update schedule, status, and notes.
+    <div className="p-6 text-white">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Work Order Detail</h1>
+          <p className="mt-1 text-sm text-gray-400">
+            Review, verify, close, or deactivate this work order.
           </p>
         </div>
 
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-            {error}
-          </div>
-        )}
-
-        <form
-          onSubmit={handleSubmit}
-          className="max-w-3xl rounded-xl border border-slate-800 bg-slate-900 p-6"
+        <Link
+          href="/work-orders"
+          className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
         >
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div>
-              <p className="text-sm text-slate-400">Customer</p>
-              <p className="mt-2 font-semibold text-white">{customerName}</p>
-            </div>
+          Back
+        </Link>
+      </div>
 
-            <div>
-              <p className="text-sm text-slate-400">Service Type</p>
-              <p className="mt-2 font-semibold text-white">
-                {serviceTypeName}
-              </p>
-            </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="rounded-xl border border-gray-800 bg-[#0B1220] p-5 lg:col-span-2">
+          <h2 className="mb-4 text-xl font-semibold">Job Information</h2>
 
-            <div>
-              <label className="text-sm font-medium text-slate-300">
-                Scheduled Date
-              </label>
-              <input
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-slate-300">
-                Time Window
-              </label>
-              <select
-                value={timeWindow}
-                onChange={(e) => setTimeWindow(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-                required
-              >
-                <option value="">Select time window</option>
-                <option value="8:00 AM - 10:00 AM">8:00 AM - 10:00 AM</option>
-                <option value="10:00 AM - 12:00 PM">10:00 AM - 12:00 PM</option>
-                <option value="12:00 PM - 2:00 PM">12:00 PM - 2:00 PM</option>
-                <option value="2:00 PM - 4:00 PM">2:00 PM - 4:00 PM</option>
-                <option value="4:00 PM - 6:00 PM">4:00 PM - 6:00 PM</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium text-slate-300">
-                Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-              >
-                <option value="Scheduled">Scheduled</option>
-                <option value="Assigned">Assigned</option>
-                <option value="Completed">Completed</option>
-                <option value="Closed">Closed</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium text-slate-300">
-                Notes
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="mt-2 min-h-32 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-              />
-            </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <DetailItem label="Work Order ID" value={displayWorkOrderNumber} />
+            <DetailItem label="Customer" value={workOrder.customerName} />
+            <DetailItem label="Service Type" value={workOrder.serviceTypeName} />
+            <DetailItem
+              label="Duration"
+              value={`${workOrder.serviceDurationMinutes} minutes`}
+            />
+            <DetailItem label="Scheduled Date" value={workOrder.scheduledDate} />
+            <DetailItem label="Time Window" value={workOrder.timeWindow} />
+            <DetailItem
+              label="Technician"
+              value={workOrder.assignedTechnicianName || "Not assigned"}
+            />
+            <DetailItem label="Status" value={workOrder.status} />
+            <DetailItem
+              label="Active"
+              value={workOrder.isActive ? "Yes" : "No"}
+            />
           </div>
 
-          <div className="mt-8 flex justify-end gap-3">
+          <div className="mt-6">
+            <p className="mb-2 text-sm font-medium text-gray-400">Notes</p>
+            <div className="rounded-lg border border-gray-800 bg-[#070B12] p-4 text-gray-200">
+              {workOrder.notes || "No notes provided."}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-800 bg-[#0B1220] p-5">
+          <h2 className="mb-4 text-xl font-semibold">Actions</h2>
+
+          <div className="space-y-3">
             <Link
-              href="/work-orders"
-              className="rounded-lg border border-slate-700 px-4 py-2 text-slate-300 hover:bg-slate-800"
+              href={`/work-orders/${workOrderId}/edit`}
+              className="block rounded-lg bg-blue-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-blue-500"
             >
-              Cancel
+              Edit Work Order
             </Link>
 
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+            <Link
+              href={`/work-orders/${workOrderId}/edit?assignTechnician=true`}
+              className="block rounded-lg bg-cyan-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-cyan-500"
             >
-              {isSaving ? "Saving..." : "Save Changes"}
-            </button>
+              Assign to Technician
+            </Link>
+
+            {workOrder.status !== "Verified" &&
+              workOrder.status !== "Closed" && (
+                <button
+                  onClick={() => updateStatus("Verified")}
+                  disabled={saving}
+                  className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+                >
+                  Mark Verified
+                </button>
+              )}
+
+            {workOrder.status === "Verified" && (
+              <button
+                onClick={() => updateStatus("Closed")}
+                disabled={saving}
+                className="w-full rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+              >
+                Close Work Order
+              </button>
+            )}
+
+            {workOrder.status !== "Closed" && (
+              <button
+                onClick={deactivateWorkOrder}
+                disabled={saving}
+                className="w-full rounded-lg border border-red-800 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-950 disabled:opacity-50"
+              >
+                Deactivate Work Order
+              </button>
+            )}
           </div>
-        </form>
+
+          <div className="mt-5 rounded-lg border border-gray-800 bg-[#070B12] p-4 text-sm text-gray-400">
+            Current status:{" "}
+            <span className="font-semibold text-white">
+              {workOrder.status}
+            </span>
+          </div>
+        </div>
       </div>
-    </AppShell>
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-400">{label}</p>
+      <p className="mt-1 rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-gray-100">
+        {value}
+      </p>
+    </div>
   );
 }

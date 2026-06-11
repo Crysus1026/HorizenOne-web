@@ -14,6 +14,7 @@ export default function CustomerDetailPage() {
   const customerId = params.id as string;
 
   const [customerName, setCustomerName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [stateValue, setStateValue] = useState("");
@@ -73,6 +74,7 @@ export default function CustomerDetailPage() {
 
       await updateDoc(customerRef, {
         customerName,
+        accountNumber: accountNumber.trim(),
         address,
         city,
         state: stateValue,
@@ -138,6 +140,20 @@ export default function CustomerDetailPage() {
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium text-slate-300">
+                Account Number
+              </label>
+              <input
+                type="text"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                placeholder="Customer account number"
                 required
               />
             </div>

@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 
 export default function NewCustomerPage() {
   const [customerName, setCustomerName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [stateValue, setStateValue] = useState("MD");
@@ -30,6 +31,7 @@ export default function NewCustomerPage() {
     await addDoc(collection(db, "customers"), {
       companyId: "horizenone-demo",
       customerName,
+      accountNumber: accountNumber.trim(),
       address,
       city,
       state: stateValue,
@@ -82,6 +84,20 @@ export default function NewCustomerPage() {
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium text-slate-300">
+                Account Number
+              </label>
+              <input
+                type="text"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                placeholder="Customer account number"
                 required
               />
             </div>
