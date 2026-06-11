@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -9,6 +10,7 @@ import { useEffect, useState } from "react";
 export default function HomePage() {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [showContactForm, setShowContactForm] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -31,55 +33,102 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <nav className="flex items-center justify-between border-b border-slate-800 px-8 py-5">
-        <div>
-          <h1 className="text-xl font-bold">HorizenOne</h1>
-          <p className="text-sm text-slate-500">Operations Platform</p>
+    <main className="relative flex min-h-screen items-center justify-center bg-black px-8 text-white">
+      <div className="-mt-24 flex max-w-4xl flex-col items-center text-center">
+        <Image
+          src="/logo.png"
+          alt="HorizenOne Logo"
+          width={900}
+          height={900}
+          priority
+          className="mb-0 h-auto"
+        />
+
+        <p className="-mt-18 max-w-2xl text-lg text-slate-400">
+          Manage customers, work orders, dispatching, scheduling, and technician
+          completion in a single modern platform built for service organizations.
+        </p>
+
+        <div className="mt-8 flex gap-4">
+          <Link
+            href="/login"
+            className="rounded-lg bg-cyan-500 px-6 py-3 font-semibold text-white hover:bg-cyan-400"
+          >
+            Login
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setShowContactForm(true)}
+            className="rounded-lg border border-slate-700 px-6 py-3 font-semibold text-slate-300 hover:bg-slate-900"
+          >
+            Learn More
+          </button>
         </div>
+      </div>
 
-        <Link
-          href="/login"
-          className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-400"
-        >
-          Login
-        </Link>
-      </nav>
+      {showContactForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-950 p-6 shadow-2xl">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-white">Learn More</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Tell us a little about your organization and we&apos;ll reach out
+                with more information about HorizenOne.
+              </p>
+            </div>
 
-      <section className="flex min-h-[calc(100vh-81px)] items-center px-8">
-        <div className="max-w-3xl">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-blue-400">
-            Work Order Management
-          </p>
+            <form className="space-y-4">
+              <input
+                type="text"
+                placeholder="Name"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+              />
 
-          <h2 className="text-5xl font-bold tracking-tight">
-            Manage customers, work orders, dispatch, and field completion in one
-            platform.
-          </h2>
+              <input
+                type="text"
+                placeholder="Company"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+              />
 
-          <p className="mt-6 max-w-2xl text-lg text-slate-400">
-            HorizenOne is a modern operations platform built for service teams
-            that need a faster way to schedule work, assign technicians, and
-            track job completion.
-          </p>
+              <input
+                type="email"
+                placeholder="Email"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+              />
 
-          <div className="mt-8 flex gap-4">
-            <Link
-              href="/login"
-              className="rounded-lg bg-blue-500 px-5 py-3 font-semibold text-white hover:bg-blue-400"
-            >
-              Login
-            </Link>
+              <input
+                type="tel"
+                placeholder="Phone"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+              />
 
-            <Link
-              href="/dashboard"
-              className="rounded-lg border border-slate-700 px-5 py-3 font-semibold text-slate-300 hover:bg-slate-900"
-            >
-              Go to Dashboard
-            </Link>
+              <textarea
+                rows={4}
+                placeholder="Tell us about your business..."
+                className="w-full resize-none rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-400"
+              />
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-white hover:bg-cyan-400"
+                >
+                  Submit
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowContactForm(false)}
+                  className="rounded-lg border border-slate-700 px-4 py-3 font-semibold text-slate-300 hover:bg-slate-900"
+                >
+                  Close
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </section>
+      )}
     </main>
   );
 }

@@ -1,4 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -6,29 +12,56 @@ const navItems = [
   { label: "Calendar", href: "/calendar" },
   { label: "Work Orders", href: "/work-orders" },
   { label: "Customers", href: "/customers" },
-  { label: "Service Types", href: "/admin/service-types" },
   { label: "Admin", href: "/admin" },
 ];
 
 export default function Sidebar() {
+  const router = useRouter();
+
+  async function handleLogout() {
+    try {
+      await signOut(auth);
+      router.push("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  }
+
   return (
-    <aside className="hidden min-h-screen w-64 border-r border-slate-800 bg-slate-950 p-4 md:block">
-      <div className="mb-8">
-        <h1 className="text-xl font-bold text-white">HorizenOne</h1>
-        <p className="text-sm text-slate-500">Operations Platform</p>
+    <aside className="hidden min-h-screen w-64 border-r border-cyan-400 bg-black p-4 md:flex md:flex-col">
+      <div className="mb-8 flex flex-col items-center">
+        <Link href="/dashboard" className="flex flex-col items-center">
+          <Image
+            src="/logo.png"
+            alt="HorizenOne Logo"
+            width={120}
+            height={120}
+            priority
+            className="mb-3"
+          />
+        </Link>
       </div>
 
-      <nav className="space-y-2">
+      <nav className="flex-1 space-y-2">
         {navItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+            className="block rounded-lg px-4 py-3 text-sm text-slate-300 transition hover:bg-sky-500 hover:text-black"
           >
             {item.label}
           </Link>
         ))}
       </nav>
+
+      <div className="mt-6 border-t border-slate-800 pt-4">
+        <button
+          onClick={handleLogout}
+          className="w-full rounded-lg border border-slate-700 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-sky-500 hover:text-black"
+        >
+          Sign Out
+        </button>
+      </div>
     </aside>
   );
 }
