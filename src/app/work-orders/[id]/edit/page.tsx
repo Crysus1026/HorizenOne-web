@@ -6,8 +6,12 @@ import Link from "next/link";
 import {
   doc,
   getDoc,
+  getDocs,
   updateDoc,
   serverTimestamp,
+  collection,
+  query,
+  where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -28,6 +32,15 @@ type WorkOrder = {
   isActive: boolean;
 };
 
+type Technician = {
+  id: string;
+  name?: string;
+  email?: string;
+  employeeId?: string;
+  role?: string;
+  isActive?: boolean;
+};
+
 export default function EditWorkOrderPage() {
   const params = useParams();
   const router = useRouter();
@@ -45,13 +58,14 @@ export default function EditWorkOrderPage() {
   const [notes, setNotes] = useState("");
   const [assignedTechnicianId, setAssignedTechnicianId] = useState("");
   const [assignedTechnicianName, setAssignedTechnicianName] = useState("");
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
 
   useEffect(() => {
     async function loadWorkOrder() {
       if (!workOrderId) return;
 
       try {
-        const ref = doc(db, "workOrders", workOrderId);
+        const ref = doc(db, "workOrders", workOrderId); 
         const snap = await getDoc(ref);
 
         if (!snap.exists()) {
@@ -74,54 +88,81 @@ export default function EditWorkOrderPage() {
       }
     }
 
+    async function loadTechnicians() {
+      const techniciansQuery = query(
+        collection(db, "users"),
+        where("role", "==", "Technician"),
+        where("isActive", "==", true)
+      );
+
+      const snap = await getDocs(techniciansQuery);
+
+      const loadedTechnicians: Technician[] = snap.docs.map((document) => ({
+        id: document.id,
+        ...(document.data() as Omit<Technician, "id">),
+      }));
+
+      setTechnicians(loadedTechnicians);
+    }
+
     loadWorkOrder();
+    loadTechnicians();
   }, [workOrderId]);
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!workOrder) return;
+  if (!workOrder) return;
 
-    if (!scheduledDate.trim()) {
-      alert("Scheduled date is required.");
-      return;
-    }
-
-    if (!timeWindow.trim()) {
-      alert("Time window is required.");
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const ref = doc(db, "workOrders", workOrderId);
-
-      let newStatus = workOrder.status;
-
-      if (workOrder.status !== "Verified" && workOrder.status !== "Closed") {
-        newStatus =
-          assignedTechnicianId.trim() !== "" ? "Assigned" : "Scheduled";
-      }
-
-      await updateDoc(ref, {
-        scheduledDate,
-        timeWindow,
-        notes,
-        assignedTechnicianId,
-        assignedTechnicianName,
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-      });
-
-      router.push(`/work-orders/${workOrderId}`);
-    } catch (error) {
-      console.error("Error updating work order:", error);
-      alert("Failed to update work order.");
-    } finally {
-      setSaving(false);
-    }
+  if (!scheduledDate.trim()) {
+    alert("Scheduled date is required.");
+    return;
   }
+
+  if (!timeWindow.trim()) {
+    alert("Time window is required.");
+    return;
+  }
+
+  setSaving(true);
+
+  try {
+    const ref = doc(db, "workOrders", workOrderId);
+
+    const selectedTechnician = technicians.find(
+      (technician) => technician.id === assignedTechnicianId
+    );
+
+    const technicianName =
+      selectedTechnician?.name ||
+      selectedTechnician?.email ||
+      "";
+
+    let newStatus = workOrder.status;
+
+    if (workOrder.status !== "Verified" && workOrder.status !== "Closed") {
+      newStatus =
+        assignedTechnicianId.trim() !== "" ? "Assigned" : "Scheduled";
+    }
+
+    await updateDoc(ref, {
+      scheduledDate,
+      timeWindow,
+      notes,
+      assignedTechnicianId,
+      assignedTechnicianName: technicianName,
+      status: newStatus,
+      updatedAt: serverTimestamp(),
+    });
+
+    router.push(`/work-orders/${workOrderId}`);
+  } catch (error) {
+    console.error("Error updating work order:", error);
+    alert("Failed to update work order.");
+  } finally {
+    setSaving(false);
+  }
+}
 
   if (loading) {
     return <div className="p-6 text-white">Loading work order...</div>;
@@ -232,33 +273,38 @@ export default function EditWorkOrderPage() {
           <div className="space-y-4">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-400">
-                Technician ID
+                Assigned Technician
               </label>
-              <input
-                type="text"
-                value={assignedTechnicianId}
-                onChange={(e) => setAssignedTechnicianId(e.target.value)}
-                className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
-                placeholder="Temporary technician ID"
-              />
-            </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-gray-400">
-                Technician Name
-              </label>
-              <input
-                type="text"
-                value={assignedTechnicianName}
-                onChange={(e) => setAssignedTechnicianName(e.target.value)}
+              <select
+                value={assignedTechnicianId}
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  const selectedTechnician = technicians.find(
+                    (technician) => technician.id === selectedId
+                  );
+
+                  setAssignedTechnicianId(selectedId);
+                  setAssignedTechnicianName(
+                    selectedTechnician?.name || selectedTechnician?.email || ""
+                  );
+                }}
                 className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
-                placeholder="Temporary technician name"
-              />
+              >
+                <option value="">Unassigned</option>
+
+                {technicians.map((technician) => (
+                  <option key={technician.id} value={technician.id}>
+                    {technician.employeeId
+                      ? `${technician.employeeId} - ${technician.name || technician.email}`
+                      : technician.name || technician.email || technician.id}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="rounded-lg border border-gray-800 bg-[#070B12] p-4 text-sm text-gray-400">
-              For now, this is manual. Later, this will become a dropdown from a
-              technicians collection.
+              Selecting a technician will move this work order to Assigned when saved.
             </div>
 
             <button

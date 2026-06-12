@@ -27,6 +27,16 @@ export default function AdminPage() {
             </p>
           </Link>
 
+          <Link
+            href="/admin/technicians"
+            className="rounded-xl border border-slate-800 bg-slate-900 p-6 hover:border-blue-500"
+          >
+            <h2 className="text-xl font-semibold">Technicians</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Create technicians for dispatch assignment.
+            </p>
+          </Link>
+
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
             <h2 className="text-xl font-semibold text-white">
               User Management
