@@ -169,7 +169,7 @@ async function generateEmployeeId(selectedCompanyId: string) {
 
   return (
     <AppShell>
-      <div className="min-h-screen bg-slate-950 p-8 text-white">
+      <div className="min-h-screen bg-black p-8 text-white">
         <div className="mb-8">
           <Link
             href="/admin"

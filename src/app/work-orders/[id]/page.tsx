@@ -8,8 +8,14 @@ import {
   getDoc,
   updateDoc,
   serverTimestamp,
+  arrayUnion,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
 
 type WorkOrder = {
   workOrderNumber?: string;
@@ -25,6 +31,8 @@ type WorkOrder = {
   assignedTechnicianName?: string;
   status: string;
   notes?: string;
+  completionNotes?: string;
+  photoUrls?: string[];
   isActive: boolean;
 };
 
@@ -37,6 +45,8 @@ export default function WorkOrderDetailPage() {
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [completionNotes, setCompletionNotes] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const displayWorkOrderNumber =
   workOrder?.workOrderNumber || `WO-${workOrderId.slice(0, 8).toUpperCase()}`;
 
@@ -53,7 +63,9 @@ export default function WorkOrderDetailPage() {
           return;
         }
 
-        setWorkOrder(snap.data() as WorkOrder);
+        const data = snap.data() as WorkOrder;
+        setWorkOrder(data);
+        setCompletionNotes(data.completionNotes || "");
       } catch (error) {
         console.error("Error loading work order:", error);
       } finally {
@@ -65,28 +77,92 @@ export default function WorkOrderDetailPage() {
   }, [workOrderId]);
 
   async function updateStatus(newStatus: string) {
-    if (!workOrderId) return;
+  if (!workOrderId) return;
 
-    setSaving(true);
+  setSaving(true);
 
-    try {
-      const ref = doc(db, "workOrders", workOrderId);
+  try {
+    const ref = doc(db, "workOrders", workOrderId);
 
-      await updateDoc(ref, {
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-      });
+    const updateData: {
+      status: string;
+      updatedAt: ReturnType<typeof serverTimestamp>;
+      completedAt?: ReturnType<typeof serverTimestamp>;
+      closedAt?: ReturnType<typeof serverTimestamp>;
+      completionNotes?: string;
+    } = {
+      status: newStatus,
+      updatedAt: serverTimestamp(),
+    };
 
-      setWorkOrder((prev) =>
-        prev ? { ...prev, status: newStatus } : prev
-      );
-    } catch (error) {
-      console.error("Error updating status:", error);
-      alert("Failed to update work order status.");
-    } finally {
-      setSaving(false);
+    if (newStatus === "Completed") {
+      updateData.completedAt = serverTimestamp();
+      updateData.completionNotes = completionNotes;
     }
+
+    if (newStatus === "Closed") {
+      updateData.closedAt = serverTimestamp();
+    }
+
+    await updateDoc(ref, updateData);
+
+    setWorkOrder((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: newStatus,
+            completionNotes,
+          }
+        : prev
+    );
+  } catch (error) {
+    console.error("Error updating status:", error);
+    alert("Failed to update work order status.");
+  } finally {
+    setSaving(false);
   }
+}
+
+async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  if (!workOrderId || !workOrder) return;
+
+  const file = e.target.files?.[0];
+
+  if (!file) return;
+
+  setUploadingPhoto(true);
+
+  try {
+    const filePath = `workOrders/${workOrderId}/photos/${Date.now()}-${file.name}`;
+    const storageRef = ref(storage, filePath);
+
+    await uploadBytes(storageRef, file);
+
+    const downloadUrl = await getDownloadURL(storageRef);
+
+    const workOrderRef = doc(db, "workOrders", workOrderId);
+
+    await updateDoc(workOrderRef, {
+      photoUrls: arrayUnion(downloadUrl),
+      updatedAt: serverTimestamp(),
+    });
+
+    setWorkOrder((prev) =>
+      prev
+        ? {
+            ...prev,
+            photoUrls: [...(prev.photoUrls || []), downloadUrl],
+          }
+        : prev
+    );
+  } catch (error) {
+    console.error("Error uploading photo:", error);
+    alert("Failed to upload photo.");
+  } finally {
+    setUploadingPhoto(false);
+    e.target.value = "";
+  }
+}
 
   async function deactivateWorkOrder() {
     if (!workOrderId) return;
@@ -189,8 +265,24 @@ export default function WorkOrderDetailPage() {
           </div>
         </div>
 
+        
+
         <div className="rounded-xl border border-gray-800 bg-[#0B1220] p-5">
           <h2 className="mb-4 text-xl font-semibold">Actions</h2>
+
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium text-gray-400">
+              Completion Notes
+            </label>
+
+            <textarea
+              value={completionNotes}
+              onChange={(e) => setCompletionNotes(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-gray-800 bg-[#070B12] p-3 text-sm text-white outline-none focus:border-cyan-400"
+              placeholder="Enter completion notes..."
+            />
+          </div>
 
           <div className="space-y-3">
             <Link
@@ -207,16 +299,26 @@ export default function WorkOrderDetailPage() {
               Assign to Technician
             </Link>
 
-            {workOrder.status !== "Verified" &&
+            {workOrder.status !== "Completed" &&
               workOrder.status !== "Closed" && (
                 <button
-                  onClick={() => updateStatus("Verified")}
+                  onClick={() => updateStatus("Completed")}
                   disabled={saving}
                   className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
                 >
-                  Mark Verified
+                  Mark Completed
                 </button>
               )}
+
+            {workOrder.status === "Completed" && (
+              <button
+                onClick={() => updateStatus("Closed")}
+                disabled={saving}
+                className="w-full rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+              >
+                Close Work Order
+              </button>
+            )}
 
             {workOrder.status === "Verified" && (
               <button
@@ -246,6 +348,51 @@ export default function WorkOrderDetailPage() {
             </span>
           </div>
         </div>
+
+        <div className="rounded-xl border border-gray-800 bg-[#0B1220] p-5 lg:col-span-2">
+  <h2 className="mb-4 text-xl font-semibold">Photos</h2>
+
+  <label className="block">
+    <span className="mb-2 block text-sm font-medium text-gray-400">
+      Upload Work Order Photo
+    </span>
+
+    <input
+      type="file"
+      accept="image/*"
+      onChange={handlePhotoUpload}
+      disabled={uploadingPhoto}
+      className="block w-full rounded-lg border border-gray-800 bg-[#070B12] p-3 text-sm text-gray-300 file:mr-4 file:rounded-lg file:border-0 file:bg-cyan-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-cyan-500 disabled:opacity-50"
+    />
+  </label>
+
+  {uploadingPhoto && (
+    <p className="mt-3 text-sm text-cyan-400">Uploading photo...</p>
+  )}
+
+  <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {(workOrder.photoUrls || []).length === 0 ? (
+      <p className="text-sm text-gray-400">No photos uploaded yet.</p>
+    ) : (
+      workOrder.photoUrls?.map((url) => (
+        <a
+          key={url}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="overflow-hidden rounded-lg border border-gray-800 bg-black"
+        >
+          <img
+            src={url}
+            alt="Work order upload"
+            className="h-40 w-full object-cover transition hover:opacity-80"
+          />
+        </a>
+      ))
+    )}
+  </div>
+</div>
+
       </div>
     </div>
   );

@@ -337,7 +337,7 @@ function isWithinDateFilter(workOrder: WorkOrder) {
 
   return (
     <AppShell>
-      <div className="min-h-screen bg-slate-950 p-8 text-white">
+      <div className="min-h-screen bg-black p-8 text-white">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Dispatch Board</h1>

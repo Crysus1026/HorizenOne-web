@@ -28,7 +28,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="hidden min-h-screen w-64 border-r border-cyan-400 bg-black p-4 md:flex md:flex-col">
+    <aside className="flex min-h-screen w-64 flex-col border-r border-cyan-400 bg-black p-4">
       <div className="mb-8 flex flex-col items-center">
         <Link href="/dashboard" className="flex flex-col items-center">
           <Image
