@@ -85,39 +85,6 @@ export default function TechniciansPage() {
     loadTechnicians();
   }, []);
 
-  async function generateEmployeeId(companyId: string) {
-  const companyPrefix = companyId
-    .replace(/[^a-zA-Z]/g, "")
-    .substring(0, 3)
-    .toUpperCase();
-
-  const techniciansQuery = query(
-    collection(db, "users"),
-    where("companyId", "==", companyId)
-  );
-
-  const snap = await getDocs(techniciansQuery);
-
-  let highestNumber = 999;
-
-  snap.forEach((doc) => {
-    const employeeId = doc.data().employeeId;
-
-    if (!employeeId) return;
-
-    const parts = employeeId.split("-");
-
-    if (parts.length !== 2) return;
-
-    const number = Number(parts[1]);
-
-    if (!Number.isNaN(number)) {
-      highestNumber = Math.max(highestNumber, number);
-    }
-  });
-
-  return `${companyPrefix}-${highestNumber + 1}`;
-}
 
 async function generateEmployeeId(selectedCompanyId: string) {
   const company = companies.find(
