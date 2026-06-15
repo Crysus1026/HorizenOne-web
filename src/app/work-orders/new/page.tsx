@@ -28,14 +28,55 @@ type ServiceType = {
   isActive: boolean;
 };
 
+type Project = {
+  id: string;
+  companyId?: string;
+  companyName?: string;
+  name?: string;
+  projectCode?: string;
+  isActive?: boolean;
+};
+
+type DeviceType = {
+  id: string;
+  companyId?: string;
+  companyName?: string;
+  projectId?: string;
+  projectName?: string;
+  name?: string;
+  deviceCode?: string;
+  isActive?: boolean;
+};
+
+type CompletionFormTemplate = {
+  id: string;
+  companyId?: string;
+  companyName?: string;
+  projectId?: string;
+  projectName?: string;
+  serviceTypeId?: string;
+  serviceTypeName?: string;
+  deviceTypeId?: string;
+  deviceTypeName?: string;
+  name?: string;
+  isActive?: boolean;
+};
+
 export default function NewWorkOrderPage() {
   const router = useRouter();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
+  const [completionTemplates, setCompletionTemplates] = useState<
+    CompletionFormTemplate[]
+  >([]);
 
   const [customerId, setCustomerId] = useState("");
   const [serviceTypeId, setServiceTypeId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [deviceTypeId, setDeviceTypeId] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [timeWindow, setTimeWindow] = useState("");
   const [notes, setNotes] = useState("");
@@ -43,6 +84,18 @@ export default function NewWorkOrderPage() {
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const filteredDeviceTypes = deviceTypes.filter(
+    (deviceType) => deviceType.isActive !== false
+  );
+
+  const selectedCompletionTemplate = completionTemplates.find(
+    (template) =>
+      template.isActive !== false &&
+      template.projectId === projectId &&
+      template.serviceTypeId === serviceTypeId &&
+      template.deviceTypeId === deviceTypeId
+  );
 
   useEffect(() => {
     async function loadOptions() {
@@ -59,26 +112,75 @@ export default function NewWorkOrderPage() {
           orderBy("name", "asc")
         );
 
-        const [customersSnapshot, serviceTypesSnapshot] = await Promise.all([
+        const projectsQuery = query(
+          collection(db, "projects"),
+          where("isActive", "==", true),
+          orderBy("name", "asc")
+        );
+
+        const deviceTypesQuery = query(
+          collection(db, "deviceTypes"),
+          where("isActive", "==", true),
+          orderBy("name", "asc")
+        );
+
+        const templatesQuery = query(
+          collection(db, "completionFormTemplates"),
+          where("isActive", "==", true),
+          orderBy("name", "asc")
+        );
+
+        const [
+          customersSnapshot,
+          serviceTypesSnapshot,
+          projectsSnapshot,
+          deviceTypesSnapshot,
+          templatesSnapshot,
+        ] = await Promise.all([
           getDocs(customersQuery),
           getDocs(serviceTypesQuery),
+          getDocs(projectsQuery),
+          getDocs(deviceTypesQuery),
+          getDocs(templatesQuery),
         ]);
 
-        const customerData = customersSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Customer[];
+        setCustomers(
+          customersSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as Customer[]
+        );
 
-        const serviceTypeData = serviceTypesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as ServiceType[];
+        setServiceTypes(
+          serviceTypesSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as ServiceType[]
+        );
 
-        setCustomers(customerData);
-        setServiceTypes(serviceTypeData);
+        setProjects(
+          projectsSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as Project[]
+        );
+
+        setDeviceTypes(
+          deviceTypesSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as DeviceType[]
+        );
+
+        setCompletionTemplates(
+          templatesSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as CompletionFormTemplate[]
+        );
       } catch (err) {
         console.error(err);
-        setError("Unable to load customers or service types.");
+        setError("Unable to load form options.");
       } finally {
         setIsLoadingOptions(false);
       }
@@ -101,8 +203,34 @@ export default function NewWorkOrderPage() {
       (serviceType) => serviceType.id === serviceTypeId
     );
 
+    const selectedProject = projects.find((project) => project.id === projectId);
+
+    const selectedDeviceType = deviceTypes.find(
+      (deviceType) => deviceType.id === deviceTypeId
+    );
+
     if (!selectedCustomer || !selectedServiceType) {
       setError("Please select a customer and service type.");
+      setIsSaving(false);
+      return;
+    }
+
+    if (!selectedProject) {
+      setError("Please select a project.");
+      setIsSaving(false);
+      return;
+    }
+
+    if (!selectedDeviceType) {
+      setError("Please select a device type.");
+      setIsSaving(false);
+      return;
+    }
+
+    if (!selectedCompletionTemplate) {
+      setError(
+        "No active completion template was found for this project, service type, and device type."
+      );
       setIsSaving(false);
       return;
     }
@@ -118,14 +246,26 @@ export default function NewWorkOrderPage() {
     try {
       await addDoc(collection(db, "workOrders"), {
         workOrderNumber: generateWorkOrderNumber(),
-        companyId: "horizenone-demo",
+        companyId: selectedProject.companyId || "horizenone-demo",
+        companyName: selectedProject.companyName || "",
 
         customerId: selectedCustomer.id,
         customerName: selectedCustomer.customerName,
 
+        projectId: selectedProject.id,
+        projectName: selectedProject.name || "",
+
         serviceTypeId: selectedServiceType.id,
         serviceTypeName: selectedServiceType.name,
         serviceDurationMinutes: selectedServiceType.durationMinutes || 0,
+
+        deviceTypeId: selectedDeviceType.id,
+        deviceTypeName: selectedDeviceType.name || "",
+
+        completionFormTemplateId: selectedCompletionTemplate.id,
+        completionFormTemplateName: selectedCompletionTemplate.name || "",
+
+        completion: null,
 
         status: "Scheduled",
 
@@ -198,6 +338,32 @@ export default function NewWorkOrderPage() {
 
             <div className="md:col-span-2">
               <label className="text-sm font-medium text-slate-300">
+                Project
+              </label>
+              <select
+                value={projectId}
+                onChange={(e) => {
+                  setProjectId(e.target.value);
+                  setDeviceTypeId("");
+                }}
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                required
+                disabled={isLoadingOptions}
+              >
+                <option value="">
+                  {isLoadingOptions ? "Loading projects..." : "Select project"}
+                </option>
+
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name || "Unnamed Project"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium text-slate-300">
                 Service Type
               </label>
               <select
@@ -219,6 +385,52 @@ export default function NewWorkOrderPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium text-slate-300">
+                Device Type
+              </label>
+              <select
+                value={deviceTypeId}
+                onChange={(e) => setDeviceTypeId(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                required
+                disabled={isLoadingOptions || !projectId}
+              >
+                <option value="">
+                  {!projectId ? "Select project first" : "Select device type"}
+                </option>
+
+                {filteredDeviceTypes.map((deviceType) => (
+                  <option key={deviceType.id} value={deviceType.id}>
+                    {deviceType.name || "Unnamed Device Type"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2 rounded-lg border border-slate-800 bg-slate-950 p-4">
+              <p className="text-sm font-medium text-slate-300">
+                Completion Template
+              </p>
+
+              {projectId && serviceTypeId && deviceTypeId ? (
+                selectedCompletionTemplate ? (
+                  <p className="mt-2 text-sm text-cyan-300">
+                    {selectedCompletionTemplate.name}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-red-300">
+                    No active completion template found for this combination.
+                  </p>
+                )
+              ) : (
+                <p className="mt-2 text-sm text-slate-500">
+                  Select project, service type, and device type to match a
+                  completion template.
+                </p>
+              )}
             </div>
 
             <div>

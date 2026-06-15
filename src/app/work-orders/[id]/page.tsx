@@ -20,6 +20,13 @@ import {
 type WorkOrder = {
   workOrderNumber?: string;
   companyId: string;
+  companyName?: string;
+  projectId?: string;
+  projectName?: string;
+  deviceTypeId?: string;
+  deviceTypeName?: string;
+  completionFormTemplateId?: string;
+  completionFormTemplateName?: string;
   customerId: string;
   customerName: string;
   serviceTypeId: string;
@@ -237,13 +244,34 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
           <h2 className="mb-4 text-xl font-semibold">Job Information</h2>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <DetailItem label="Work Order ID" value={displayWorkOrderNumber} />
             <DetailItem label="Customer" value={workOrder.customerName} />
-            <DetailItem label="Service Type" value={workOrder.serviceTypeName} />
-            <DetailItem
-              label="Duration"
-              value={`${workOrder.serviceDurationMinutes} minutes`}
-            />
+
+<DetailItem
+  label="Company"
+  value={workOrder.companyName || workOrder.companyId || "—"}
+/>
+
+<DetailItem
+  label="Project"
+  value={workOrder.projectName || "Not selected"}
+/>
+
+<DetailItem label="Service Type" value={workOrder.serviceTypeName} />
+
+<DetailItem
+  label="Device Type"
+  value={workOrder.deviceTypeName || "Not selected"}
+/>
+
+<DetailItem
+  label="Completion Template"
+  value={workOrder.completionFormTemplateName || "Not assigned"}
+/>
+
+<DetailItem
+  label="Duration"
+  value={`${workOrder.serviceDurationMinutes} minutes`}
+/>
             <DetailItem label="Scheduled Date" value={workOrder.scheduledDate} />
             <DetailItem label="Time Window" value={workOrder.timeWindow} />
             <DetailItem

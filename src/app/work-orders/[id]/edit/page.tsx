@@ -12,12 +12,20 @@ import {
   collection,
   query,
   where,
+  orderBy,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 type WorkOrder = {
   workOrderNumber?: string;
   companyId: string;
+  companyName?: string;
+  projectId?: string;
+  projectName?: string;
+  deviceTypeId?: string;
+  deviceTypeName?: string;
+  completionFormTemplateId?: string;
+  completionFormTemplateName?: string;
   customerId: string;
   customerName: string;
   serviceTypeId: string;
@@ -41,6 +49,40 @@ type Technician = {
   isActive?: boolean;
 };
 
+type Project = {
+  id: string;
+  companyId?: string;
+  companyName?: string;
+  name?: string;
+  projectCode?: string;
+  isActive?: boolean;
+};
+
+type DeviceType = {
+  id: string;
+  companyId?: string;
+  companyName?: string;
+  projectId?: string;
+  projectName?: string;
+  name?: string;
+  deviceCode?: string;
+  isActive?: boolean;
+};
+
+type CompletionFormTemplate = {
+  id: string;
+  companyId?: string;
+  companyName?: string;
+  projectId?: string;
+  projectName?: string;
+  serviceTypeId?: string;
+  serviceTypeName?: string;
+  deviceTypeId?: string;
+  deviceTypeName?: string;
+  name?: string;
+  isActive?: boolean;
+};
+
 export default function EditWorkOrderPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,6 +101,27 @@ export default function EditWorkOrderPage() {
   const [assignedTechnicianId, setAssignedTechnicianId] = useState("");
   const [assignedTechnicianName, setAssignedTechnicianName] = useState("");
   const [technicians, setTechnicians] = useState<Technician[]>([]);
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
+  const [completionTemplates, setCompletionTemplates] = useState<
+    CompletionFormTemplate[]
+  >([]);
+
+  const [projectId, setProjectId] = useState("");
+  const [deviceTypeId, setDeviceTypeId] = useState("");
+
+  const filteredDeviceTypes = deviceTypes.filter(
+    (deviceType) => deviceType.isActive !== false
+  );
+
+  const selectedCompletionTemplate = completionTemplates.find(
+    (template) =>
+      template.isActive !== false &&
+      template.projectId === projectId &&
+      template.serviceTypeId === workOrder?.serviceTypeId &&
+      template.deviceTypeId === deviceTypeId
+  );
 
   useEffect(() => {
     async function loadWorkOrder() {
@@ -81,6 +144,8 @@ export default function EditWorkOrderPage() {
         setNotes(data.notes || "");
         setAssignedTechnicianId(data.assignedTechnicianId || "");
         setAssignedTechnicianName(data.assignedTechnicianName || "");
+        setProjectId(data.projectId || "");
+        setDeviceTypeId(data.deviceTypeId || "");
       } catch (error) {
         console.error("Error loading work order:", error);
       } finally {
@@ -107,7 +172,56 @@ export default function EditWorkOrderPage() {
 
     loadWorkOrder();
     loadTechnicians();
+    loadAdminOptions();
   }, [workOrderId]);
+
+  async function loadAdminOptions() {
+  const projectsQuery = query(
+    collection(db, "projects"),
+    where("isActive", "==", true),
+    orderBy("name", "asc")
+  );
+
+  const deviceTypesQuery = query(
+    collection(db, "deviceTypes"),
+    where("isActive", "==", true),
+    orderBy("name", "asc")
+  );
+
+  const templatesQuery = query(
+    collection(db, "completionFormTemplates"),
+    where("isActive", "==", true),
+    orderBy("name", "asc")
+  );
+
+  const [projectsSnapshot, deviceTypesSnapshot, templatesSnapshot] =
+    await Promise.all([
+      getDocs(projectsQuery),
+      getDocs(deviceTypesQuery),
+      getDocs(templatesQuery),
+    ]);
+
+  setProjects(
+    projectsSnapshot.docs.map((document) => ({
+      id: document.id,
+      ...(document.data() as Omit<Project, "id">),
+    }))
+  );
+
+  setDeviceTypes(
+    deviceTypesSnapshot.docs.map((document) => ({
+      id: document.id,
+      ...(document.data() as Omit<DeviceType, "id">),
+    }))
+  );
+
+  setCompletionTemplates(
+    templatesSnapshot.docs.map((document) => ({
+      id: document.id,
+      ...(document.data() as Omit<CompletionFormTemplate, "id">),
+    }))
+  );
+}
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
   e.preventDefault();
@@ -133,10 +247,36 @@ export default function EditWorkOrderPage() {
       (technician) => technician.id === assignedTechnicianId
     );
 
+    const selectedProject = projects.find((project) => project.id === projectId);
+
+    const selectedDeviceType = deviceTypes.find(
+      (deviceType) => deviceType.id === deviceTypeId
+    );
+
     const technicianName =
       selectedTechnician?.name ||
       selectedTechnician?.email ||
       "";
+
+      if (!selectedProject) {
+  alert("Project is required.");
+  setSaving(false);
+  return;
+}
+
+if (!selectedDeviceType) {
+  alert("Device type is required.");
+  setSaving(false);
+  return;
+}
+
+if (!selectedCompletionTemplate) {
+  alert(
+    "No active completion template was found for this project, service type, and device type."
+  );
+  setSaving(false);
+  return;
+}
 
     let newStatus = workOrder.status;
 
@@ -146,6 +286,18 @@ export default function EditWorkOrderPage() {
     }
 
     await updateDoc(ref, {
+      companyId: selectedProject.companyId || workOrder.companyId,
+      companyName: selectedProject.companyName || workOrder.companyName || "",
+
+      projectId: selectedProject.id,
+      projectName: selectedProject.name || "",
+
+      deviceTypeId: selectedDeviceType.id,
+      deviceTypeName: selectedDeviceType.name || "",
+
+      completionFormTemplateId: selectedCompletionTemplate.id,
+      completionFormTemplateName: selectedCompletionTemplate.name || "",
+      
       scheduledDate,
       timeWindow,
       notes,
@@ -215,12 +367,76 @@ export default function EditWorkOrderPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <ReadOnlyField label="Customer" value={workOrder.customerName} />
-            <ReadOnlyField label="Service Type" value={workOrder.serviceTypeName} />
-            <ReadOnlyField
-              label="Duration"
-              value={`${workOrder.serviceDurationMinutes} minutes`}
-            />
-            <ReadOnlyField label="Current Status" value={workOrder.status} />
+
+<div>
+  <label className="mb-2 block text-sm font-medium text-gray-400">
+    Project
+  </label>
+  <select
+    value={projectId}
+    onChange={(e) => {
+      setProjectId(e.target.value);
+      setDeviceTypeId("");
+    }}
+    className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
+  >
+    <option value="">Select project</option>
+    {projects.map((project) => (
+      <option key={project.id} value={project.id}>
+        {project.name || "Unnamed Project"}
+      </option>
+    ))}
+  </select>
+</div>
+
+<ReadOnlyField label="Service Type" value={workOrder.serviceTypeName} />
+
+<div>
+  <label className="mb-2 block text-sm font-medium text-gray-400">
+    Device Type
+  </label>
+  <select
+    value={deviceTypeId}
+    onChange={(e) => setDeviceTypeId(e.target.value)}
+    className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
+  >
+    <option value="">Select device type</option>
+    {filteredDeviceTypes.map((deviceType) => (
+      <option key={deviceType.id} value={deviceType.id}>
+        {deviceType.name || "Unnamed Device Type"}
+      </option>
+    ))}
+  </select>
+</div>
+
+<div className="md:col-span-2 rounded-lg border border-gray-800 bg-[#070B12] p-4">
+  <p className="text-sm font-medium text-gray-400">
+    Completion Template
+  </p>
+
+  {projectId && workOrder.serviceTypeId && deviceTypeId ? (
+    selectedCompletionTemplate ? (
+      <p className="mt-2 text-sm text-cyan-300">
+        {selectedCompletionTemplate.name}
+      </p>
+    ) : (
+      <p className="mt-2 text-sm text-red-300">
+        No active completion template found for this combination.
+      </p>
+    )
+  ) : (
+    <p className="mt-2 text-sm text-gray-500">
+      Select project and device type to match a completion template.
+    </p>
+  )}
+</div>
+
+<ReadOnlyField
+  label="Duration"
+  value={`${workOrder.serviceDurationMinutes} minutes`}
+/>
+
+<ReadOnlyField label="Current Status" value={workOrder.status} />
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-400">
