@@ -327,7 +327,7 @@ function isWithinDateFilter(workOrder: WorkOrder) {
   if (!value) return dateFilter === "all";
 
   const workOrderDate = parseLocalDate(value);
-  if (Number.isNaN(workOrderDate.getTime())) return dateFilter === "all";
+  if (!workOrderDate || Number.isNaN(workOrderDate.getTime())) return dateFilter === "all";
 
   const today = startOfDay(new Date());
 
