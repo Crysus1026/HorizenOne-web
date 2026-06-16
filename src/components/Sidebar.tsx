@@ -30,16 +30,6 @@ export default function Sidebar() {
   return (
     <aside className="flex min-h-screen w-64 flex-col border-r border-cyan-400 bg-black p-4">
       <div className="mb-8 flex flex-col items-center">
-        <Link href="/dashboard" className="flex flex-col items-center">
-          <Image
-            src="/logo.png"
-            alt="HorizenOne Logo"
-            width={120}
-            height={120}
-            priority
-            className="mb-3"
-          />
-        </Link>
       </div>
 
       <nav className="flex-1 space-y-2">

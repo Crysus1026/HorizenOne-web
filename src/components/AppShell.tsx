@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
+import TopBar from "./TopBar";
 
 export default function AppShell({
   children,
@@ -11,11 +12,15 @@ export default function AppShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-black text-white">
+  <div className="min-h-screen bg-black text-white">
+    {/* Top Bar */}
+    <TopBar />
+
+    <div className="flex">
       {/* Mobile Hamburger */}
       <button
         onClick={() => setSidebarOpen(true)}
-        className="fixed right-4 top-4 z-50 rounded-md border-cyan-400 bg-black p-2 text-cyan-400 shadow-lg md:hidden"
+        className="fixed right-4 top-4 z-50 rounded-md border border-cyan-400 bg-black p-2 text-cyan-400 shadow-lg md:hidden"
       >
         ☰
       </button>
@@ -50,7 +55,10 @@ export default function AppShell({
       </div>
 
       {/* Main Content */}
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 overflow-auto p-6">
+        {children}
+      </main>
     </div>
-  );
+  </div>
+);
 }

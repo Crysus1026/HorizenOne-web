@@ -243,7 +243,7 @@ const completedCount = filteredWorkOrders.filter(
   function formatDate(value?: string) {
     if (!value) return "No date";
 
-    const date = new Date(value);
+    const date = parseLocalDate(value);
 
     if (Number.isNaN(date.getTime())) {
       return value;
@@ -291,6 +291,21 @@ const completedCount = filteredWorkOrders.filter(
   return searchableText.includes(search);
 }
 
+function parseLocalDate(value?: string) {
+  if (!value) return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    12,
+    0,
+    0
+  );
+}
+
   function getServiceType(workOrder: WorkOrder) {
     return workOrder.serviceTypeName || workOrder.serviceType || "Service";
   }
@@ -311,7 +326,7 @@ function isWithinDateFilter(workOrder: WorkOrder) {
   const value = workOrder.scheduledDate || workOrder.date;
   if (!value) return dateFilter === "all";
 
-  const workOrderDate = new Date(value);
+  const workOrderDate = parseLocalDate(value);
   if (Number.isNaN(workOrderDate.getTime())) return dateFilter === "all";
 
   const today = startOfDay(new Date());
