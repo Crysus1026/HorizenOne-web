@@ -245,7 +245,7 @@ const completedCount = filteredWorkOrders.filter(
 
     const date = parseLocalDate(value);
 
-    if (Number.isNaN(date.getTime())) {
+    if (!date || Number.isNaN(date.getTime())) {
       return value;
     }
 
