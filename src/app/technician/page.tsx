@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import TechnicianTopBar from "@/components/TechnicianTopBar";
 
 type WorkOrder = {
   id: string;
@@ -110,20 +111,10 @@ export default function TechnicianPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <header className="flex h-20 items-center justify-between border-b border-cyan-500 px-4">
-        <Image
-          src="/logo.png"
-          alt="HorizenOne"
-          width={80}
-          height={80}
-          className="object-contain"
-        />
-
-        <div className="text-right">
-          <p className="text-sm text-zinc-400">Technician Portal</p>
-          <p className="text-xs text-cyan-400">{todayString}</p>
-        </div>
-      </header>
+      <TechnicianTopBar
+        title="Technician Portal"
+        subtitle={todayString}
+    />
 
       <main className="p-4">
         <div className="mb-6">

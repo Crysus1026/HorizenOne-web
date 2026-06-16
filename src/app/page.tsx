@@ -1,6 +1,7 @@
 "use client";
 
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import Image from "next/image";
 import Link from "next/link";
@@ -13,16 +14,26 @@ export default function HomePage() {
   const [showContactForm, setShowContactForm] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.push("/dashboard");
-      } else {
-        setIsCheckingAuth(false);
-      }
-    });
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      setIsCheckingAuth(false);
+      return;
+    }
 
-    return () => unsubscribe();
-  }, [router]);
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    const role = userDoc.data()?.role;
+
+    if (role === "Technician") {
+      router.push("/technician");
+    } else if (role === "System Admin" || userDoc.data()?.isSystemAdmin === true) {
+      router.push("/system-admin");
+    } else {
+      router.push("/dashboard");
+    }
+  });
+
+  return () => unsubscribe();
+}, [router]);
 
   if (isCheckingAuth) {
     return (

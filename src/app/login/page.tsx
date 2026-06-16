@@ -4,6 +4,9 @@ import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,8 +18,28 @@ export default function LoginPage() {
     e.preventDefault();
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push("/dashboard");
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      const userDoc = await getDoc(
+        doc(db, "users", credential.user.uid)
+      );
+
+      const role = userDoc.data()?.role;
+
+      if (!userDoc.exists()) {
+        alert("User profile not found.");
+        return;
+      }
+
+      if (role === "Technician") {
+        router.push("/technician");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (error) {
       console.error(error);
       alert("Login failed. Check your email and password.");
@@ -54,6 +77,11 @@ export default function LoginPage() {
         <button className="mt-6 w-full rounded-lg bg-blue-500 px-4 py-3 font-semibold text-white hover:bg-blue-400">
           Sign In
         </button>
+        <div className="mt-3 text-right text-sm">
+          <Link href="/reset-password" className="text-cyan-400 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
       </form>
     </main>
   );
