@@ -57,6 +57,7 @@ export default function CustomersPage() {
     return (
       customer.customerName?.toLowerCase().includes(search) ||
       customer.address?.toLowerCase().includes(search) ||
+      customer.accountNumber?.toLowerCase().includes(search) ||
       customer.city?.toLowerCase().includes(search) ||
       customer.phone?.toLowerCase().includes(search) ||
       customer.email?.toLowerCase().includes(search)

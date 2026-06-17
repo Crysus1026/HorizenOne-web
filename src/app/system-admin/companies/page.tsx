@@ -21,6 +21,7 @@ type Company = {
   id: string;
   name?: string;
   companyCode?: string;
+  businessType?: string;
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
@@ -30,6 +31,20 @@ type Company = {
   zip?: string;
   isActive?: boolean;
 };
+
+const businessTypeOptions = [
+  "Field Service",
+  "Auto Repair",
+  "Hair Salon",
+  "Nail Salon",
+  "Cleaning Service",
+  "Landscaping",
+  "HVAC",
+  "Plumbing",
+  "Electrical",
+  "Medical / Wellness",
+  "Other",
+];
 
 export default function SystemAdminCompaniesPage() {
   const router = useRouter();
@@ -62,6 +77,9 @@ export default function SystemAdminCompaniesPage() {
   const [editCity, setEditCity] = useState("");
   const [editStateValue, setEditStateValue] = useState("");
   const [editZip, setEditZip] = useState("");
+  const [editBusinessType, setEditBusinessType] = useState("Field Service");
+
+  const [businessType, setBusinessType] = useState("Field Service");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -141,6 +159,7 @@ export default function SystemAdminCompaniesPage() {
       await addDoc(collection(db, "companies"), {
         name: name.trim(),
         companyCode: companyCode.trim(),
+        businessType,
         contactName: contactName.trim(),
         contactEmail: contactEmail.trim(),
         contactPhone: contactPhone.trim(),
@@ -167,6 +186,7 @@ export default function SystemAdminCompaniesPage() {
   setEditingCompany(company);
   setEditName(company.name || "");
   setEditCompanyCode(company.companyCode || "");
+  setEditBusinessType(company.businessType || "Field Service");
   setEditContactName(company.contactName || "");
   setEditContactEmail(company.contactEmail || "");
   setEditContactPhone(company.contactPhone || "");
@@ -285,6 +305,24 @@ async function saveCompanyChanges() {
           onChange={(e) => setEditCompanyCode(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
         />
+      </label>
+
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-gray-300">
+          Business Type
+        </span>
+
+        <select
+          value={editBusinessType}
+          onChange={(e) => setEditBusinessType(e.target.value)}
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-white outline-none focus:border-cyan-400"
+        >
+          {businessTypeOptions.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label className="block">
@@ -420,6 +458,24 @@ async function saveCompanyChanges() {
 
               <label className="block">
                 <span className="text-sm font-medium text-slate-300">
+                  Business Type
+                </span>
+
+                <select
+                  value={businessType}
+                  onChange={(e) => setBusinessType(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+                >
+                  {businessTypeOptions.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-300">
                   Contact Name
                 </span>
                 <input
@@ -543,6 +599,7 @@ async function saveCompanyChanges() {
                   <tr>
                     <th className="px-4 py-3 font-medium">Company</th>
                     <th className="px-4 py-3 font-medium">Code</th>
+                    <th className="px-4 py-3 font-medium">Business Type</th>
                     <th className="px-4 py-3 font-medium">Contact</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                     <th className="px-4 py-3 font-medium">Actions</th>
@@ -565,6 +622,10 @@ async function saveCompanyChanges() {
 
                       <td className="px-4 py-3 text-slate-300">
                         {company.companyCode || "—"}
+                      </td>
+
+                      <td className="px-4 py-3 text-slate-300">
+                        {company.businessType || "Field Service"}
                       </td>
 
                       <td className="px-4 py-3 text-slate-300">

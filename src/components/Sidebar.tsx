@@ -13,6 +13,9 @@ const navItems = [
   { label: "Work Orders", href: "/work-orders" },
   { label: "Customers", href: "/customers" },
   { label: "Admin", href: "/admin" },
+  { label: "Fleet (Coming Soon)", href: "#!" },
+  { label: "Inventory (Coming Soon)", href: "#" },
+  { label: "Quotes/Invoices (Coming Soon)", href: "$" },
 ];
 
 export default function Sidebar() {

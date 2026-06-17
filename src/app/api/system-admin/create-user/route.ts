@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       email,
       firstName,
       lastName,
+      name: `${firstName} ${lastName}`.trim(),
       companyId,
       companyName: companyName || "",
       role,

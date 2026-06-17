@@ -32,6 +32,7 @@ type UserProfileRecord = {
   email?: string;
   firstName?: string;
   lastName?: string;
+  name?: string;
   role?: string;
   isActive?: boolean;
   isSystemAdmin?: boolean;
@@ -183,6 +184,7 @@ setCompanies(companyList);
           password: newPassword,
           firstName: newFirstName.trim(),
           lastName: newLastName.trim(),
+          name: `${newFirstName.trim()} ${newLastName.trim()}`.trim(),
           companyId: newCompanyId,
           companyName: selectedCompany.name || selectedCompany.Name || "",
           role: newRole,
@@ -239,6 +241,7 @@ async function saveUserChanges() {
     await updateDoc(doc(db, "users", editingUser.id), {
       firstName: editFirstName.trim(),
       lastName: editLastName.trim(),
+      name: `${editFirstName.trim()} ${editLastName.trim()}`.trim(),
       role: editRole,
       companyId: editCompanyId,
       companyName: selectedCompany.name || "",
@@ -548,15 +551,15 @@ async function saveUserChanges() {
 
                 <tbody className="divide-y divide-slate-700">
                   {users.map((user) => {
-                    const fullName = `${user.firstName || ""} ${
-                      user.lastName || ""
-                    }`.trim();
+                    const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+                      user.email ||
+                      "Unnamed User";
 
                     return (
                       <tr key={user.id}>
                         <td className="px-4 py-3">
                           <div className="font-medium text-white">
-                            {fullName || "Unnamed User"}
+                            {fullName}
                           </div>
                           <div className="text-xs text-slate-400">
                             {user.email || "No email"}

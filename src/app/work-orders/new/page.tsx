@@ -12,7 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type Customer = {
@@ -64,6 +64,9 @@ type CompletionFormTemplate = {
 
 export default function NewWorkOrderPage() {
   const router = useRouter();
+
+  const searchParams = useSearchParams();
+  const customerIdFromUrl = searchParams.get("customerId");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
@@ -188,6 +191,18 @@ export default function NewWorkOrderPage() {
 
     loadOptions();
   }, []);
+
+  useEffect(() => {
+  if (!customerIdFromUrl || customers.length === 0) return;
+
+  const selectedCustomer = customers.find(
+    (customer) => customer.id === customerIdFromUrl
+  );
+
+  if (!selectedCustomer) return;
+
+  setCustomerId(selectedCustomer.id);
+}, [customerIdFromUrl, customers]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
