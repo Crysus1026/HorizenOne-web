@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 type Customer = {
   id: string;
@@ -62,7 +62,7 @@ type CompletionFormTemplate = {
   isActive?: boolean;
 };
 
-export default function NewWorkOrderPage() {
+function NewWorkOrderPageContent() {
   const router = useRouter();
 
   const searchParams = useSearchParams();
@@ -518,5 +518,20 @@ export default function NewWorkOrderPage() {
         </form>
       </div>
     </AppShell>
+  );
+}
+export default function NewWorkOrderPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell>
+          <div className="p-8 text-slate-400">
+            Loading new work order...
+          </div>
+        </AppShell>
+      }
+    >
+      <NewWorkOrderPageContent />
+    </Suspense>
   );
 }
