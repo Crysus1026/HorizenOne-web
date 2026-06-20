@@ -18,6 +18,12 @@ import { Suspense, useEffect, useState } from "react";
 type Customer = {
   id: string;
   customerName: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  phone?: string;
+  email?: string;
   isActive: boolean;
 };
 
@@ -266,6 +272,12 @@ function NewWorkOrderPageContent() {
 
         customerId: selectedCustomer.id,
         customerName: selectedCustomer.customerName,
+        address: selectedCustomer.address || "",
+        city: selectedCustomer.city || "",
+        state: selectedCustomer.state || "",
+        zip: selectedCustomer.zip || "",
+        phone: selectedCustomer.phone || "",
+        email: selectedCustomer.email || "",
 
         projectId: selectedProject.id,
         projectName: selectedProject.name || "",
@@ -277,10 +289,15 @@ function NewWorkOrderPageContent() {
         deviceTypeId: selectedDeviceType.id,
         deviceTypeName: selectedDeviceType.name || "",
 
+        completionTemplateId: selectedCompletionTemplate.id,
+        completionTemplateName: selectedCompletionTemplate.name || "",
         completionFormTemplateId: selectedCompletionTemplate.id,
         completionFormTemplateName: selectedCompletionTemplate.name || "",
 
         completion: null,
+        completionData: {},
+        completionNotes: "",
+        completionPhotoUrls: [],
 
         status: "Scheduled",
 
