@@ -46,11 +46,20 @@ type WorkOrder = {
 };
 
 type CompletionField = {
-  id: string;
+  fieldKey: string;
   label: string;
-  type: "text" | "textarea" | "number" | "select" | "checkbox";
+  type:
+    | "text"
+    | "textarea"
+    | "number"
+    | "select"
+    | "checkbox"
+    | "date"
+    | "photo"
+    | "signature";
   required?: boolean;
   options?: string[];
+  order?: number;
 };
 
 type CompletionTemplate = {
@@ -234,7 +243,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
     for (const field of completionTemplate.fields) {
       if (!field.required) continue;
 
-      const value = completionData[field.id];
+      const value = completionData[field.fieldKey];
 
       if (
         value === undefined ||
@@ -261,7 +270,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
   for (const field of completionTemplate.fields) {
     if (!field.required) continue;
 
-    const value = device.completionData[field.id];
+    const value = device.completionData[field.fieldKey];
 
     if (
       value === undefined ||
@@ -318,10 +327,10 @@ function handleRemoveCompletionDevice(deviceId: string) {
     const sharedClassName =
       "mt-2 w-full rounded-md border border-zinc-700 bg-black p-3 text-white outline-none focus:border-cyan-500";
 
-    const value = completionData[field.id];
+    const value = completionData[field.fieldKey];
 
     return (
-      <div key={field.id}>
+      <div key={field.fieldKey}>
         <label className="block text-sm font-medium text-zinc-300">
           {field.label}
           {field.required && <span className="text-red-400"> *</span>}
@@ -331,7 +340,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
           <input
             value={String(value ?? "")}
             onChange={(e) =>
-              handleCompletionFieldChange(field.id, e.target.value)
+              handleCompletionFieldChange(field.fieldKey, e.target.value)
             }
             className={sharedClassName}
           />
@@ -342,7 +351,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
             type="number"
             value={String(value ?? "")}
             onChange={(e) =>
-              handleCompletionFieldChange(field.id, e.target.value)
+              handleCompletionFieldChange(field.fieldKey, e.target.value)
             }
             className={sharedClassName}
           />
@@ -352,7 +361,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
           <textarea
             value={String(value ?? "")}
             onChange={(e) =>
-              handleCompletionFieldChange(field.id, e.target.value)
+              handleCompletionFieldChange(field.fieldKey, e.target.value)
             }
             rows={4}
             className={sharedClassName}
@@ -363,7 +372,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
           <select
             value={String(value ?? "")}
             onChange={(e) =>
-              handleCompletionFieldChange(field.id, e.target.value)
+              handleCompletionFieldChange(field.fieldKey, e.target.value)
             }
             className={sharedClassName}
           >
@@ -382,7 +391,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
               type="checkbox"
               checked={Boolean(value)}
               onChange={(e) =>
-                handleCompletionFieldChange(field.id, e.target.checked)
+                handleCompletionFieldChange(field.fieldKey, e.target.checked)
               }
             />
             Yes
@@ -502,7 +511,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
               ) : (
                 <div className="mt-4 space-y-4">
                   {completionTemplate.fields.map((field, index) => (
-                    <div key={`${field.id || "field"}-${index}`}>
+                    <div key={`${field.fieldKey || "field"}-${index}`}>
                       {renderCompletionField(field)}
                     </div>
                   ))}
@@ -587,10 +596,10 @@ function handleRemoveCompletionDevice(deviceId: string) {
             </div>
 
             {completionTemplate?.fields.map((field, index) => {
-              const value = device.completionData[field.id];
+              const value = device.completionData[field.fieldKey];
 
               return (
-                <div key={`${device.id}-${field.id || "field"}-${index}`}>
+                <div key={`${device.id}-${field.fieldKey || "field"}-${index}`}>
                   <label className="block text-sm font-medium text-zinc-300">
                     {field.label}
                     {field.required && (
@@ -604,7 +613,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
                       onChange={(e) =>
                         handleCompletionDeviceFieldChange(
                           device.id,
-                          field.id,
+                          field.fieldKey,
                           e.target.value
                         )
                       }
@@ -619,7 +628,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
                       onChange={(e) =>
                         handleCompletionDeviceFieldChange(
                           device.id,
-                          field.id,
+                          field.fieldKey,
                           e.target.value
                         )
                       }
@@ -633,7 +642,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
                       onChange={(e) =>
                         handleCompletionDeviceFieldChange(
                           device.id,
-                          field.id,
+                          field.fieldKey,
                           e.target.value
                         )
                       }
@@ -648,7 +657,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
                       onChange={(e) =>
                         handleCompletionDeviceFieldChange(
                           device.id,
-                          field.id,
+                          field.fieldKey,
                           e.target.value
                         )
                       }
@@ -671,7 +680,7 @@ function handleRemoveCompletionDevice(deviceId: string) {
                         onChange={(e) =>
                           handleCompletionDeviceFieldChange(
                             device.id,
-                            field.id,
+                            field.fieldKey,
                             e.target.checked
                           )
                         }
