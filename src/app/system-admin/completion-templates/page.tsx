@@ -415,7 +415,12 @@ export default function SystemAdminCompletionTemplatesPage() {
   setEditName(template.name || "");
   setEditDescription(template.description || "");
   setEditFields(
-    [...(template.fields || [])].sort((a, b) => a.order - b.order)
+    [...(template.fields || [])]
+      .sort((a, b) => a.order - b.order)
+      .map((field, index) => ({
+        ...field,
+        fieldKey: field.fieldKey || `${makeFieldKey(field.label)}_${index + 1}`,
+      }))
   );
   setEditFieldLabel("");
   setEditFieldType("text");
