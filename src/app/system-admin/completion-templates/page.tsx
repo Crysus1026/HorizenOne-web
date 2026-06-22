@@ -420,6 +420,7 @@ export default function SystemAdminCompletionTemplatesPage() {
       .map((field, index) => ({
         ...field,
         fieldKey: field.fieldKey || `${makeFieldKey(field.label)}_${index + 1}`,
+        order: index + 1,
       }))
   );
   setEditFieldLabel("");
