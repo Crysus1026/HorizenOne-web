@@ -1,3 +1,6 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 
@@ -41,10 +44,12 @@ export async function POST(request: Request) {
       );
     }
 
+    const fullName = `${firstName} ${lastName}`.trim();
+
     const userRecord = await adminAuth.createUser({
       email,
       password,
-      displayName: `${firstName} ${lastName}`,
+      displayName: fullName,
       disabled: false,
     });
 
@@ -52,7 +57,7 @@ export async function POST(request: Request) {
       email,
       firstName,
       lastName,
-      name: `${firstName} ${lastName}`.trim(),
+      name: fullName,
       companyId,
       companyName: companyName || "",
       role,
@@ -67,10 +72,17 @@ export async function POST(request: Request) {
       uid: userRecord.uid,
     });
   } catch (error: any) {
-    console.error(error);
+    console.error("Create user API error:", {
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+    });
 
     return NextResponse.json(
-      { error: error?.message || "Unable to create user." },
+      {
+        error: error?.message || "Unable to create user.",
+        code: error?.code || "unknown",
+      },
       { status: 500 }
     );
   }
