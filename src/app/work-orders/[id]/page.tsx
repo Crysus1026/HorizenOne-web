@@ -39,6 +39,9 @@ type WorkOrder = {
   status: string;
   notes?: string;
   completionNotes?: string;
+  completionData?: Record<string, any>;
+  completionDevices?: any[];
+  completionPhotoUrls?: string[];
   photoUrls?: string[];
   isActive: boolean;
 };
@@ -291,6 +294,37 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
               {workOrder.notes || "No notes provided."}
             </div>
           </div>
+
+          <div className="mt-6">
+  <h2 className="mb-4 text-xl font-semibold">Completion Form</h2>
+
+  {workOrder.completionData &&
+  Object.keys(workOrder.completionData).length > 0 ? (
+    <div className="space-y-3">
+      {Object.entries(workOrder.completionData).map(([key, value]) => (
+        <div
+          key={key}
+          className="rounded-lg border border-gray-800 bg-[#070B12] p-4"
+        >
+          <p className="text-sm font-medium text-gray-400">{key}</p>
+          <p className="mt-1 text-gray-100">
+            {Array.isArray(value)
+              ? value.join(", ")
+              : value === true
+              ? "Yes"
+              : value === false
+              ? "No"
+              : value?.toString() || "—"}
+          </p>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="rounded-lg border border-gray-800 bg-[#070B12] p-4 text-sm text-gray-400">
+      No completion form data found.
+    </div>
+  )}
+</div>
         </div>
 
         
