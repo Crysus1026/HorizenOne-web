@@ -14,7 +14,7 @@ const navItems = [
   { label: "Customers", href: "/customers" },
   { label: "Admin", href: "/admin" },
   { label: "Fleet (Coming Soon)", href: "#!" },
-  { label: "Inventory (Coming Soon)", href: "#" },
+  { label: "Inventory (BETA)", href: "/inventory" },
   { label: "Quotes/Invoices (Coming Soon)", href: "$" },
 ];
 

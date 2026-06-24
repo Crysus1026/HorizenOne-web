@@ -86,6 +86,12 @@ export default function SystemAdminPage() {
           />
 
           <SystemAdminCard
+            title="Inventory"
+            description="View users, roles, company access, and system access."
+            href="/system-admin/inventory-items"
+          />
+
+          <SystemAdminCard
             title="Settings"
             description="Manage system-wide application settings."
             href="/system-admin/settings"

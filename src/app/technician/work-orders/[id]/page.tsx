@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -21,6 +22,7 @@ type CompletionValue = string | number | boolean;
 type WorkOrder = {
   id: string;
   customerName?: string;
+  companyId?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -81,6 +83,15 @@ type CompletionDevice = {
   completionData: Record<string, CompletionValue>;
 };
 
+type InventoryUnit = {
+  id: string;
+  inventoryItemId: string;
+  itemName: string;
+  serialNumber: string;
+  status: string;
+  assignedTechnicianId?: string;
+};
+
 export default function TechnicianWorkOrderPage() {
   const params = useParams();
   const router = useRouter();
@@ -101,6 +112,9 @@ export default function TechnicianWorkOrderPage() {
 
   const [completionDevices, setCompletionDevices] = useState<CompletionDevice[]>([]);
 
+  const [assignedInventoryUnits, setAssignedInventoryUnits] = useState<InventoryUnit[]>([]);
+  const [selectedInventoryUnitId, setSelectedInventoryUnitId] = useState("");
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
@@ -144,6 +158,21 @@ export default function TechnicianWorkOrderPage() {
           where("serviceTypeId", "==", workOrderData.serviceTypeId),
           where("isActive", "==", true)
         );
+
+        const assignedInventoryQuery = query(
+          collection(db, "inventoryUnits"),
+          where("assignedTechnicianId", "==", currentUser.uid),
+          where("status", "==", "assigned")
+        );
+
+        const assignedInventorySnapshot = await getDocs(assignedInventoryQuery);
+
+        const assignedInventoryData = assignedInventorySnapshot.docs.map((document) => ({
+          id: document.id,
+          ...(document.data() as Omit<InventoryUnit, "id">),
+        }));
+
+        setAssignedInventoryUnits(assignedInventoryData);
 
         const templatesSnapshot = await getDocs(templatesQuery);
 
@@ -313,6 +342,37 @@ function handleRemoveCompletionDevice(deviceId: string) {
         completedByTechnicianName: workOrder.assignedTechnicianName || "",
         updatedAt: serverTimestamp(),
       });
+
+      if (selectedInventoryUnitId) {
+  const selectedUnit = assignedInventoryUnits.find(
+    (unit) => unit.id === selectedInventoryUnitId
+  );
+
+  if (selectedUnit) {
+    await updateDoc(doc(db, "inventoryUnits", selectedUnit.id), {
+      status: "installed",
+      workOrderId: workOrder.id,
+      workOrderNumber: workOrder.id,
+      installedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await addDoc(collection(db, "inventoryTransactions"), {
+      companyId: workOrder.companyId || "",
+      inventoryItemId: selectedUnit.inventoryItemId,
+      inventoryUnitId: selectedUnit.id,
+      itemName: selectedUnit.itemName,
+      serialNumber: selectedUnit.serialNumber,
+      type: "installed",
+      toTechnicianId: workOrder.assignedTechnicianId || "",
+      toTechnicianName: workOrder.assignedTechnicianName || "",
+      workOrderId: workOrder.id,
+      workOrderNumber: workOrder.id,
+      notes: "Installed during work order completion",
+      createdAt: serverTimestamp(),
+    });
+  }
+}
 
       router.push("/technician");
     } catch (err) {
@@ -714,6 +774,30 @@ function handleRemoveCompletionDevice(deviceId: string) {
       ))}
     </div>
   )}
+</div>
+
+<div className="mt-6">
+  <label className="block text-sm font-medium text-zinc-300">
+    Installed Device
+  </label>
+
+  <select
+    value={selectedInventoryUnitId}
+    onChange={(event) => setSelectedInventoryUnitId(event.target.value)}
+    className="mt-2 w-full rounded-md border border-zinc-700 bg-black p-3 text-white outline-none focus:border-cyan-500"
+  >
+    <option value="">No inventory device installed</option>
+
+    {assignedInventoryUnits.map((unit) => (
+      <option key={unit.id} value={unit.id}>
+        {unit.itemName} - {unit.serialNumber}
+      </option>
+    ))}
+  </select>
+
+  <p className="mt-2 text-xs text-zinc-500">
+    Only inventory assigned to this technician appears here.
+  </p>
 </div>
 
               <label className="mt-6 block text-sm text-zinc-400">
