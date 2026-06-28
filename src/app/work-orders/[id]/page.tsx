@@ -9,6 +9,10 @@ import {
   updateDoc,
   serverTimestamp,
   arrayUnion,
+  collection,
+  getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 import {
@@ -46,6 +50,17 @@ type WorkOrder = {
   isActive: boolean;
 };
 
+type InstalledInventoryUnit = {
+  id: string;
+  itemName?: string;
+  serialNumber?: string;
+  status?: string;
+  installedAt?: {
+    seconds: number;
+    nanoseconds: number;
+  };
+};
+
 export default function WorkOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -57,7 +72,11 @@ export default function WorkOrderDetailPage() {
   const [saving, setSaving] = useState(false);
   const [completionNotes, setCompletionNotes] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const displayWorkOrderNumber =
+  const [installedInventoryUnits, setInstalledInventoryUnits] = useState<
+  InstalledInventoryUnit[]
+>([]);
+  
+const displayWorkOrderNumber =
   workOrder?.workOrderNumber || `WO-${workOrderId.slice(0, 8).toUpperCase()}`;
 
   useEffect(() => {
@@ -76,6 +95,24 @@ export default function WorkOrderDetailPage() {
         const data = snap.data() as WorkOrder;
         setWorkOrder(data);
         setCompletionNotes(data.completionNotes || "");
+
+        const installedInventoryQuery = query(
+          collection(db, "inventoryUnits"),
+          where("workOrderId", "==", workOrderId)
+        );
+
+        const installedInventorySnapshot = await getDocs(
+          installedInventoryQuery
+        );
+
+        const installedInventoryData = installedInventorySnapshot.docs.map(
+          (document) => ({
+            id: document.id,
+            ...(document.data() as Omit<InstalledInventoryUnit, "id">),
+          })
+        );
+
+setInstalledInventoryUnits(installedInventoryData);
       } catch (error) {
         console.error("Error loading work order:", error);
       } finally {
@@ -296,35 +333,75 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
           </div>
 
           <div className="mt-6">
-  <h2 className="mb-4 text-xl font-semibold">Completion Form</h2>
+            <h2 className="mb-4 text-xl font-semibold">
+              Completion Form
+            </h2>
 
-  {workOrder.completionData &&
-  Object.keys(workOrder.completionData).length > 0 ? (
-    <div className="space-y-3">
-      {Object.entries(workOrder.completionData).map(([key, value]) => (
-        <div
-          key={key}
-          className="rounded-lg border border-gray-800 bg-[#070B12] p-4"
-        >
-          <p className="text-sm font-medium text-gray-400">{key}</p>
-          <p className="mt-1 text-gray-100">
-            {Array.isArray(value)
-              ? value.join(", ")
-              : value === true
-              ? "Yes"
-              : value === false
-              ? "No"
-              : value?.toString() || "—"}
-          </p>
+            {workOrder.completionData &&
+            Object.keys(workOrder.completionData).length > 0 ? (
+              <div className="space-y-3">
+                {Object.entries(workOrder.completionData).map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="rounded-lg border border-gray-800 bg-[#070B12] p-4"
+                  >
+                    <p className="text-sm font-medium text-gray-400">{key}</p>
+                    <p className="mt-1 text-gray-100">
+                      {Array.isArray(value)
+                        ? value.join(", ")
+                        : value === true
+                        ? "Yes"
+                        : value === false
+                        ? "No"
+                        : value?.toString() || "—"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-gray-800 bg-[#070B12] p-4 text-sm text-gray-400">
+                No completion form data found.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6">
+          <h2 className="mb-4 text-xl font-semibold">
+            Installed Equipment
+          </h2>
+
+          {installedInventoryUnits.length === 0 ? (
+            <div className="rounded-lg border border-gray-800 bg-[#070B12] p-4 text-sm text-gray-400">
+              No serialized inventory has been linked to this work order.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {installedInventoryUnits.map((unit) => (
+                <Link
+                  key={unit.id}
+                  href={`/inventory/units/${unit.id}`}
+                  className="block rounded-lg border border-gray-800 bg-[#070B12] p-4 hover:border-cyan-500"
+                >
+                  <p className="text-sm text-gray-400">
+                    Installed Device
+                  </p>
+
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {unit.itemName}
+                  </p>
+
+                  <p className="mt-1 text-cyan-400">
+                    Serial #: {unit.serialNumber}
+                  </p>
+
+                  <p className="mt-2 text-xs text-gray-500">
+                    Status: {unit.status}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
-      ))}
-    </div>
-  ) : (
-    <div className="rounded-lg border border-gray-800 bg-[#070B12] p-4 text-sm text-gray-400">
-      No completion form data found.
-    </div>
-  )}
-</div>
         </div>
 
         

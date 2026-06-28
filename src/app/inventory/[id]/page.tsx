@@ -78,6 +78,14 @@ export default function InventoryItemDetailPage() {
   const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
 
+  const [statusActionUnitId, setStatusActionUnitId] = useState("");
+  const [statusActionNotes, setStatusActionNotes] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  const [serialSearch, setSerialSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [technicianFilter, setTechnicianFilter] = useState("all");
+
   async function loadData() {
     if (!inventoryItemId) return;
 
@@ -152,9 +160,46 @@ export default function InventoryItemDetailPage() {
     };
   }, [units]);
 
-  const availableUnits = useMemo(() => {
-    return units.filter((unit) => unit.status === "available");
+  const assignableUnits = useMemo(() => {
+    return units.filter(
+      (unit) => unit.status === "available" || unit.status === "returned"
+    );
   }, [units]);
+
+  const technicianFilterOptions = useMemo(() => {
+    const technicianMap = new Map<string, string>();
+
+    units.forEach((unit) => {
+      if (unit.assignedTechnicianId && unit.assignedTechnicianName) {
+        technicianMap.set(unit.assignedTechnicianId, unit.assignedTechnicianName);
+      }
+    });
+
+    return Array.from(technicianMap.entries()).map(([id, name]) => ({
+      id,
+      name,
+    }));
+  }, [units]);
+
+  const filteredUnits = useMemo(() => {
+    return units.filter((unit) => {
+      const matchesSerial =
+        serialSearch.trim() === "" ||
+        unit.serialNumber
+          .toLowerCase()
+          .includes(serialSearch.trim().toLowerCase());
+
+      const matchesStatus =
+        statusFilter === "all" || unit.status === statusFilter;
+
+      const matchesTechnician =
+        technicianFilter === "all" ||
+        (technicianFilter === "unassigned" && !unit.assignedTechnicianId) ||
+        unit.assignedTechnicianId === technicianFilter;
+
+      return matchesSerial && matchesStatus && matchesTechnician;
+    });
+  }, [units, serialSearch, statusFilter, technicianFilter]);
 
   function getTechnicianName(technician: Technician) {
     const fullName = `${technician.firstName || ""} ${
@@ -175,7 +220,7 @@ export default function InventoryItemDetailPage() {
   }
 
   function toggleSelectAllAvailable() {
-    const availableIds = availableUnits.map((unit) => unit.id);
+    const availableIds = assignableUnits.map((unit) => unit.id);
 
     if (selectedUnitIds.length === availableIds.length) {
       setSelectedUnitIds([]);
@@ -304,7 +349,7 @@ export default function InventoryItemDetailPage() {
 
     try {
       for (const unit of selectedUnits) {
-        if (unit.status !== "available") continue;
+        if (unit.status !== "available" && unit.status !== "returned") continue;
 
         await updateDoc(doc(db, "inventoryUnits", unit.id), {
           status: "assigned",
@@ -332,6 +377,85 @@ export default function InventoryItemDetailPage() {
         });
       }
 
+      async function handleUpdateUnitStatus(
+        unit: InventoryUnit,
+        newStatus: "damaged" | "lost" | "returned"
+      ) {
+        if (!item) return;
+
+        const confirmed = window.confirm(
+          newStatus === "returned"
+            ? `Mark ${unit.serialNumber} as RTU / returned?`
+            : `Mark ${unit.serialNumber} as ${newStatus}?`
+        );
+
+        if (!confirmed) return;
+
+        setIsUpdatingStatus(true);
+        setStatusActionUnitId(unit.id);
+
+        try {
+          const updateData =
+            newStatus === "returned"
+              ? {
+                  status: "returned",
+                  locationName: item.defaultLocationName || "Main Warehouse",
+                  assignedTechnicianId: "",
+                  assignedTechnicianName: "",
+                  updatedAt: serverTimestamp(),
+                }
+              : {
+                  status: newStatus,
+                  updatedAt: serverTimestamp(),
+                };
+
+          await updateDoc(doc(db, "inventoryUnits", unit.id), updateData);
+
+          await addDoc(collection(db, "inventoryTransactions"), {
+            companyId: item.companyId,
+            companyName: item.companyName || "",
+
+            projectId: item.projectId || "",
+            projectName: item.projectName || "",
+
+            inventoryItemId,
+            inventoryUnitId: unit.id,
+
+            itemName: item.itemName,
+            serialNumber: unit.serialNumber,
+
+            type: newStatus,
+
+            fromLocationName: unit.locationName || "",
+            fromTechnicianId: unit.assignedTechnicianId || "",
+            fromTechnicianName: unit.assignedTechnicianName || "",
+
+            toLocationName:
+              newStatus === "returned"
+                ? item.defaultLocationName || "Main Warehouse"
+                : "",
+
+            notes:
+              statusActionNotes.trim() ||
+              (newStatus === "returned"
+                ? "Marked RTU / returned from item detail page"
+                : `Marked ${newStatus} from item detail page`),
+
+            createdAt: serverTimestamp(),
+          });
+
+          setStatusActionNotes("");
+
+          await loadData();
+        } catch (error) {
+          console.error("Error updating unit status:", error);
+          alert("Unable to update unit status.");
+        } finally {
+          setStatusActionUnitId("");
+          setIsUpdatingStatus(false);
+        }
+      }
+
       setSelectedTechnicianId("");
       setSelectedUnitIds([]);
 
@@ -345,6 +469,86 @@ export default function InventoryItemDetailPage() {
       setIsAssigning(false);
     }
   }
+
+  async function handleUpdateUnitStatus(
+  unit: InventoryUnit,
+  newStatus: "damaged" | "lost" | "returned"
+) {
+  if (!item) return;
+
+  const confirmMessage =
+    newStatus === "returned"
+      ? `Mark ${unit.serialNumber} as RTU / returned?`
+      : `Mark ${unit.serialNumber} as ${newStatus}?`;
+
+  const confirmed = window.confirm(confirmMessage);
+
+  if (!confirmed) return;
+
+  setIsUpdatingStatus(true);
+  setStatusActionUnitId(unit.id);
+
+  try {
+    const updateData =
+      newStatus === "returned"
+        ? {
+            status: "returned",
+            locationName: item.defaultLocationName || "Main Warehouse",
+            assignedTechnicianId: "",
+            assignedTechnicianName: "",
+            updatedAt: serverTimestamp(),
+          }
+        : {
+            status: newStatus,
+            updatedAt: serverTimestamp(),
+          };
+
+    await updateDoc(doc(db, "inventoryUnits", unit.id), updateData);
+
+    await addDoc(collection(db, "inventoryTransactions"), {
+      companyId: item.companyId,
+      companyName: item.companyName || "",
+
+      projectId: item.projectId || "",
+      projectName: item.projectName || "",
+
+      inventoryItemId,
+      inventoryUnitId: unit.id,
+
+      itemName: item.itemName,
+      serialNumber: unit.serialNumber,
+
+      type: newStatus,
+
+      fromLocationName: unit.locationName || "",
+      fromTechnicianId: unit.assignedTechnicianId || "",
+      fromTechnicianName: unit.assignedTechnicianName || "",
+
+      toLocationName:
+        newStatus === "returned"
+          ? item.defaultLocationName || "Main Warehouse"
+          : "",
+
+      notes:
+        statusActionNotes.trim() ||
+        (newStatus === "returned"
+          ? "Marked RTU / returned from item detail page"
+          : `Marked ${newStatus} from item detail page`),
+
+      createdAt: serverTimestamp(),
+    });
+
+    setStatusActionNotes("");
+
+    await loadData();
+  } catch (error) {
+    console.error("Error updating unit status:", error);
+    alert("Unable to update unit status.");
+  } finally {
+    setStatusActionUnitId("");
+    setIsUpdatingStatus(false);
+  }
+}
 
   function getStatusClass(status: InventoryUnit["status"]) {
     if (status === "available") {
@@ -559,7 +763,7 @@ X2S-1003`}
                 onClick={toggleSelectAllAvailable}
                 className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
               >
-                Select All Available
+                Select All Assignable
               </button>
 
               <button
@@ -576,13 +780,13 @@ X2S-1003`}
           </div>
 
           <div className="mt-4 rounded-lg border border-slate-800">
-            {availableUnits.length === 0 ? (
+            {assignableUnits.length === 0 ? (
               <p className="p-4 text-sm text-slate-400">
                 No available units to assign.
               </p>
             ) : (
               <div className="max-h-72 overflow-y-auto">
-                {availableUnits.map((unit) => (
+                {assignableUnits.map((unit) => (
                   <label
                     key={unit.id}
                     className="flex cursor-pointer items-center justify-between border-b border-slate-800 px-4 py-3 text-sm hover:bg-slate-800/60"
@@ -609,71 +813,207 @@ X2S-1003`}
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
-          <h2 className="text-lg font-semibold text-white">
-            Serialized Units
-          </h2>
+<section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
+  <h2 className="text-lg font-semibold text-white">
+    Serialized Units
+  </h2>
 
-          {units.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400">
-              No serialized units have been received for this item yet.
-            </p>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="py-2 pr-4">Serial Number</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Location</th>
-                    <th className="py-2 pr-4">Technician</th>
-                    <th className="py-2 pr-4">Work Order</th>
-                  </tr>
-                </thead>
+  <p className="mt-1 text-sm text-slate-400">
+    Search, filter, and update individual serialized units.
+  </p>
 
-                <tbody>
-                  {units.map((unit) => (
-                    <tr
-                      key={unit.id}
-                      className="border-b border-slate-800 text-slate-200"
-                    >
-                      <td className="py-3 pr-4 font-medium">
-                        <Link
-                          href={`/inventory/units/${unit.id}`}
-                          className="text-cyan-400 hover:text-cyan-300"
-                        >
-                          {unit.serialNumber}
-                        </Link>
-                      </td>
+  <div className="mt-4 grid gap-4 md:grid-cols-4">
+    <label className="block">
+      <span className="text-sm font-medium text-slate-300">
+        Search Serial Number
+      </span>
+      <input
+        value={serialSearch}
+        onChange={(event) => setSerialSearch(event.target.value)}
+        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+        placeholder="Search serial..."
+      />
+    </label>
 
-                      <td className="py-3 pr-4">
-                        <span
-                          className={`rounded-full border px-2 py-1 text-xs font-medium ${getStatusClass(
-                            unit.status
-                          )}`}
-                        >
-                          {unit.status}
-                        </span>
-                      </td>
+    <label className="block">
+      <span className="text-sm font-medium text-slate-300">
+        Status
+      </span>
+      <select
+        value={statusFilter}
+        onChange={(event) => setStatusFilter(event.target.value)}
+        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+      >
+        <option value="all">All Statuses</option>
+        <option value="available">Available</option>
+        <option value="assigned">Assigned</option>
+        <option value="installed">Installed</option>
+        <option value="damaged">Damaged</option>
+        <option value="lost">Lost</option>
+        <option value="returned">Returned / RTU</option>
+      </select>
+    </label>
 
-                      <td className="py-3 pr-4">
-                        {unit.locationName || "—"}
-                      </td>
+    <label className="block">
+      <span className="text-sm font-medium text-slate-300">
+        Technician
+      </span>
+      <select
+        value={technicianFilter}
+        onChange={(event) => setTechnicianFilter(event.target.value)}
+        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+      >
+        <option value="all">All Technicians</option>
+        <option value="unassigned">Unassigned</option>
+        {technicianFilterOptions.map((technician) => (
+          <option key={technician.id} value={technician.id}>
+            {technician.name}
+          </option>
+        ))}
+      </select>
+    </label>
 
-                      <td className="py-3 pr-4">
-                        {unit.assignedTechnicianName || "—"}
-                      </td>
+    <label className="block">
+      <span className="text-sm font-medium text-slate-300">
+        Status Action Notes
+      </span>
+      <input
+        value={statusActionNotes}
+        onChange={(event) => setStatusActionNotes(event.target.value)}
+        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+        placeholder="Optional action note"
+      />
+    </label>
+  </div>
 
-                      <td className="py-3 pr-4">
-                        {unit.workOrderNumber || "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+  <div className="mt-4 flex items-center justify-between gap-4 text-sm text-slate-400">
+    <p>
+      Showing {filteredUnits.length} of {units.length} units
+    </p>
+
+    <button
+      type="button"
+      onClick={() => {
+        setSerialSearch("");
+        setStatusFilter("all");
+        setTechnicianFilter("all");
+      }}
+      className="text-cyan-400 hover:text-cyan-300"
+    >
+      Clear Filters
+    </button>
+  </div>
+
+  {units.length === 0 ? (
+    <p className="mt-4 text-sm text-slate-400">
+      No serialized units have been received for this item yet.
+    </p>
+  ) : filteredUnits.length === 0 ? (
+    <p className="mt-4 text-sm text-slate-400">
+      No units match the selected filters.
+    </p>
+  ) : (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-slate-800 text-slate-400">
+          <tr>
+            <th className="py-2 pr-4">Serial Number</th>
+            <th className="py-2 pr-4">Status</th>
+            <th className="py-2 pr-4">Location</th>
+            <th className="py-2 pr-4">Technician</th>
+            <th className="py-2 pr-4">Work Order</th>
+            <th className="py-2 pr-4">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {filteredUnits.map((unit) => (
+            <tr
+              key={unit.id}
+              className="border-b border-slate-800 text-slate-200"
+            >
+              <td className="py-3 pr-4 font-medium">
+                <Link
+                  href={`/inventory/units/${unit.id}`}
+                  className="text-cyan-400 hover:text-cyan-300"
+                >
+                  {unit.serialNumber}
+                </Link>
+              </td>
+
+              <td className="py-3 pr-4">
+                <span
+                  className={`rounded-full border px-2 py-1 text-xs font-medium ${getStatusClass(
+                    unit.status
+                  )}`}
+                >
+                  {unit.status}
+                </span>
+              </td>
+
+              <td className="py-3 pr-4">
+                {unit.locationName || "—"}
+              </td>
+
+              <td className="py-3 pr-4">
+                {unit.assignedTechnicianName || "—"}
+              </td>
+
+              <td className="py-3 pr-4">
+                {unit.workOrderNumber || "—"}
+              </td>
+
+              <td className="py-3 pr-4">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateUnitStatus(unit, "damaged")}
+                    disabled={
+                      isUpdatingStatus ||
+                      unit.status === "installed" ||
+                      unit.status === "damaged"
+                    }
+                    className="rounded-md border border-amber-500/40 px-2 py-1 text-xs text-amber-300 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isUpdatingStatus && statusActionUnitId === unit.id
+                      ? "Updating..."
+                      : "Damaged"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateUnitStatus(unit, "lost")}
+                    disabled={
+                      isUpdatingStatus ||
+                      unit.status === "installed" ||
+                      unit.status === "lost"
+                    }
+                    className="rounded-md border border-red-500/40 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Lost
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateUnitStatus(unit, "returned")}
+                    disabled={
+                      isUpdatingStatus ||
+                      unit.status === "installed" ||
+                      unit.status === "returned"
+                    }
+                    className="rounded-md border border-slate-500/40 px-2 py-1 text-xs text-slate-300 hover:bg-slate-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    RTU
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</section>
       </div>
     </AppShell>
   );

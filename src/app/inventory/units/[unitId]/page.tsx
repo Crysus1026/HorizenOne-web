@@ -9,6 +9,9 @@ import {
   getDocs,
   orderBy,
   query,
+  addDoc,
+  serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import Link from "next/link";
@@ -17,11 +20,13 @@ import { useEffect, useState } from "react";
 
 type InventoryUnit = {
   id: string;
+  companyId?: string;
   inventoryItemId?: string;
   itemName?: string;
   serialNumber: string;
   status: string;
   locationName?: string;
+  assignedTechnicianId?: string;
   assignedTechnicianName?: string;
   workOrderNumber?: string;
 };
@@ -62,6 +67,9 @@ export default function InventoryUnitHistoryPage() {
   const [unit, setUnit] = useState<InventoryUnit | null>(null);
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [statusActionNotes, setStatusActionNotes] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   async function loadData() {
     if (!unitId) return;
@@ -126,6 +134,73 @@ export default function InventoryUnitHistoryPage() {
     );
   }
 
+  async function handleUpdateUnitStatus(
+  newStatus: "damaged" | "lost" | "returned"
+) {
+  if (!unit) return;
+
+  const confirmed = window.confirm(
+    newStatus === "returned"
+      ? `Mark ${unit.serialNumber} as RTU / returned?`
+      : `Mark ${unit.serialNumber} as ${newStatus}?`
+  );
+
+  if (!confirmed) return;
+
+  setIsUpdatingStatus(true);
+
+  try {
+    const updateData =
+      newStatus === "returned"
+        ? {
+            status: "returned",
+            locationName: "Main Warehouse",
+            assignedTechnicianId: "",
+            assignedTechnicianName: "",
+            updatedAt: serverTimestamp(),
+          }
+        : {
+            status: newStatus,
+            updatedAt: serverTimestamp(),
+          };
+
+    await updateDoc(doc(db, "inventoryUnits", unit.id), updateData);
+
+    await addDoc(collection(db, "inventoryTransactions"), {
+      companyId: unit.companyId || "",
+      inventoryItemId: unit.inventoryItemId || "",
+      inventoryUnitId: unit.id,
+
+      itemName: unit.itemName || "",
+      serialNumber: unit.serialNumber,
+
+      type: newStatus,
+
+      fromLocationName: unit.locationName || "",
+      fromTechnicianName: unit.assignedTechnicianName || "",
+
+      toLocationName: newStatus === "returned" ? "Main Warehouse" : "",
+
+      notes:
+        statusActionNotes.trim() ||
+        (newStatus === "returned"
+          ? "Marked RTU / returned from unit detail page"
+          : `Marked ${newStatus} from unit detail page`),
+
+      createdAt: serverTimestamp(),
+    });
+
+    setStatusActionNotes("");
+
+    await loadData();
+  } catch (error) {
+    console.error("Error updating unit status:", error);
+    alert("Unable to update unit status.");
+  } finally {
+    setIsUpdatingStatus(false);
+  }
+}
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -180,6 +255,69 @@ export default function InventoryUnitHistoryPage() {
           <h2 className="text-lg font-semibold text-white">
             Transaction History
           </h2>
+
+          <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
+            <h2 className="text-lg font-semibold text-white">
+              Unit Actions
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Update this serialized unit and record the action in inventory history.
+            </p>
+
+            <label className="mt-4 block">
+              <span className="text-sm font-medium text-slate-300">
+                Action Notes
+              </span>
+              <input
+                value={statusActionNotes}
+                onChange={(event) => setStatusActionNotes(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+                placeholder="Optional note for damaged, lost, or RTU"
+              />
+            </label>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => handleUpdateUnitStatus("damaged")}
+                disabled={
+                  isUpdatingStatus ||
+                  unit.status === "installed" ||
+                  unit.status === "damaged"
+                }
+                className="rounded-lg border border-amber-500/40 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Mark Damaged
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleUpdateUnitStatus("lost")}
+                disabled={
+                  isUpdatingStatus ||
+                  unit.status === "installed" ||
+                  unit.status === "lost"
+                }
+                className="rounded-lg border border-red-500/40 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Mark Lost
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleUpdateUnitStatus("returned")}
+                disabled={
+                  isUpdatingStatus ||
+                  unit.status === "installed" ||
+                  unit.status === "returned"
+                }
+                className="rounded-lg border border-slate-500/40 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                RTU / Return to Warehouse
+              </button>
+            </div>
+          </section>
 
           {transactions.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">
