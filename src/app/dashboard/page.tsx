@@ -2,6 +2,7 @@
 
 import AppShell from "@/components/AppShell";
 import { db } from "@/lib/firebase";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import {
   collection,
   getDocs,
@@ -43,6 +44,12 @@ function todayString() {
 }
 
 export default function DashboardPage() {
+    const {
+    companyId,
+    isSystemAdmin,
+    isLoadingProfile,
+    profileError,
+  } = useUserProfile();
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,47 +57,73 @@ export default function DashboardPage() {
 
   const today = todayString();
 
-  useEffect(() => {
-    async function loadDashboard() {
-      setIsLoading(true);
-      setError("");
+useEffect(() => {
+  if (isLoadingProfile) return;
 
-      try {
-        const workOrdersSnap = await getDocs(
-          query(
+  if (profileError) {
+    setError(profileError);
+    setIsLoading(false);
+    return;
+  }
+
+  if (!isSystemAdmin && !companyId) {
+    setError("User is missing companyId.");
+    setIsLoading(false);
+    return;
+  }
+
+  async function loadDashboard() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const workOrdersQuery = isSystemAdmin
+        ? query(
             collection(db, "workOrders"),
             where("isActive", "==", true),
             orderBy("scheduledDate", "asc")
           )
-        );
+        : query(
+            collection(db, "workOrders"),
+            where("companyId", "==", companyId),
+            where("isActive", "==", true),
+            orderBy("scheduledDate", "asc")
+          );
 
-        const usersSnap = await getDocs(
-          query(collection(db, "users"), orderBy("email", "asc"))
-        );
+      const usersQuery = isSystemAdmin
+        ? query(collection(db, "users"), orderBy("email", "asc"))
+        : query(
+            collection(db, "users"),
+            where("companyId", "==", companyId),
+            where("role", "==", "Technician")
+          );
 
-        setWorkOrders(
-          workOrdersSnap.docs.map((doc) => ({
-            id: doc.id,
-            ...(doc.data() as Omit<WorkOrder, "id">),
-          }))
-        );
+      const workOrdersSnap = await getDocs(workOrdersQuery);
+      const usersSnap = await getDocs(usersQuery);
 
-        setUsers(
-          usersSnap.docs.map((doc) => ({
-            id: doc.id,
-            ...(doc.data() as Omit<UserProfile, "id">),
-          }))
-        );
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load dashboard.");
-      } finally {
-        setIsLoading(false);
-      }
+      setWorkOrders(
+        workOrdersSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<WorkOrder, "id">),
+        }))
+      );
+
+      setUsers(
+        usersSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<UserProfile, "id">),
+        }))
+      );
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load dashboard.");
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    loadDashboard();
-  }, []);
+  loadDashboard();
+}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
 
   const dashboardData = useMemo(() => {
     const openWorkOrders = workOrders.filter(

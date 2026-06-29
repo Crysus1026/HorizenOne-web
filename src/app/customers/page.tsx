@@ -1,10 +1,11 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { getCompanyCollection } from "@/lib/companyQueries";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, getDocs, orderBy, where, query } from "firebase/firestore";
 
 type Customer = {
   id: string;
@@ -24,32 +25,56 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function loadCustomers() {
-      try {
-        const customersQuery = query(
-          collection(db, "customers"),
-          orderBy("createdAt", "desc")
-        );
+  const {
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+} = useUserProfile();
 
-        const snapshot = await getDocs(customersQuery);
+useEffect(() => {
+  if (isLoadingProfile) return;
 
-        const customerData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Customer[];
+  if (profileError) {
+    setError(profileError);
+    setIsLoading(false);
+    return;
+  }
 
-        setCustomers(customerData);
-      } catch (error) {
-        console.error("Error loading customers:", error);
-      } finally {
-        setIsLoading(false);
-      }
+  if (!isSystemAdmin && !companyId) {
+    setError("User is missing companyId.");
+    setIsLoading(false);
+    return;
+  }
+
+  async function loadCustomers() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const customersData = await getCompanyCollection<Customer>(
+        "customers",
+        companyId,
+        isSystemAdmin,
+        [
+          where("isActive", "==", true),
+          orderBy("customerName", "asc"),
+        ]
+      );
+
+      setCustomers(customersData);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load customers.");
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    loadCustomers();
-  }, []);
+  loadCustomers();
+}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
 
   const filteredCustomers = customers.filter((customer) => {
     const search = searchTerm.toLowerCase();
@@ -82,6 +107,11 @@ export default function CustomersPage() {
             + New Customer
           </Link>
         </div>
+        {error && (
+  <div className="mt-6 rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300">
+    {error}
+  </div>
+)}
 
         <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900">
           <div className="border-b border-slate-800 p-4">

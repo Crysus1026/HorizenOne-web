@@ -2,6 +2,8 @@
 
 import AppShell from "@/components/AppShell";
 import Link from "next/link";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { getCompanyCollection } from "@/lib/companyQueries";
 import { useEffect, useState } from "react";
 import {
   addDoc,
@@ -32,6 +34,12 @@ type Company = {
 };
 
 export default function TechniciansPage() {
+  const {
+  companyId: userCompanyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+} = useUserProfile();
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -40,6 +48,7 @@ export default function TechniciansPage() {
   const [error, setError] = useState("");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   async function loadCompanies() {
   const companiesQuery = query(
@@ -62,28 +71,47 @@ export default function TechniciansPage() {
   }
 }
 
-  async function loadTechnicians() {
-    const techniciansQuery = query(
-      collection(db, "users"),
-      orderBy("name", "asc")
-    );
+useEffect(() => {
+  if (isLoadingProfile) return;
 
-    const snap = await getDocs(techniciansQuery);
-
-    const loadedTechnicians = snap.docs
-      .map((document) => ({
-        id: document.id,
-        ...(document.data() as Omit<Technician, "id">),
-      }))
-      .filter((user: any) => user.role === "Technician");
-
-    setTechnicians(loadedTechnicians);
+  if (profileError) {
+    setError(profileError);
+    setIsLoading(false);
+    return;
   }
 
-  useEffect(() => {
-    loadCompanies();
-    loadTechnicians();
-  }, []);
+  if (!isSystemAdmin && !userCompanyId) {
+    setError("User is missing companyId.");
+    setIsLoading(false);
+    return;
+  }
+
+  async function loadTechnicians() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const techniciansData = await getCompanyCollection<Technician>(
+        "users",
+        userCompanyId,
+        isSystemAdmin,
+        [
+          where("role", "==", "Technician"),
+          orderBy("lastName", "asc"),
+        ]
+      );
+
+      setTechnicians(techniciansData);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load technicians.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  loadTechnicians();
+}, [userCompanyId, isSystemAdmin, isLoadingProfile, profileError]);
 
 
 async function generateEmployeeId(selectedCompanyId: string) {
@@ -158,7 +186,18 @@ async function generateEmployeeId(selectedCompanyId: string) {
       setEmail("");
       setPhone("");
 
-      await loadTechnicians();
+      const techniciansData = await getCompanyCollection<Technician>(
+        "users",
+        userCompanyId,
+        isSystemAdmin,
+        [
+          where("role", "==", "Technician"),
+          orderBy("lastName", "asc"),
+        ]
+      );
+
+      setTechnicians(techniciansData);
+
     } catch (err) {
       console.error(err);
       setError("Unable to create technician.");

@@ -1,10 +1,11 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { orderBy, where } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { getCompanyCollection } from "@/lib/companyQueries";
 
 type WorkOrder = {
   id: string;
@@ -18,35 +19,58 @@ type WorkOrder = {
 };
 
 export default function WorkOrdersPage() {
+  const {
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+} = useUserProfile();
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function loadWorkOrders() {
-      try {
-        const workOrdersQuery = query(
-          collection(db, "workOrders"),
-          orderBy("createdAt", "desc")
-        );
+useEffect(() => {
+  if (isLoadingProfile) return;
 
-        const snapshot = await getDocs(workOrdersQuery);
+  if (profileError) {
+    setError(profileError);
+    setIsLoading(false);
+    return;
+  }
 
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as WorkOrder[];
+  if (!isSystemAdmin && !companyId) {
+    setError("User is missing companyId.");
+    setIsLoading(false);
+    return;
+  }
 
-        setWorkOrders(data);
-      } catch (error) {
-        console.error("Error loading work orders:", error);
-      } finally {
-        setIsLoading(false);
-      }
+  async function loadWorkOrders() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const workOrdersData = await getCompanyCollection<WorkOrder>(
+        "workOrders",
+        companyId,
+        isSystemAdmin,
+        [
+          where("isActive", "==", true),
+          orderBy("scheduledDate", "desc"),
+        ]
+      );
+
+      setWorkOrders(workOrdersData);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load work orders.");
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    loadWorkOrders();
-  }, []);
+  loadWorkOrders();
+}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
 
   const filteredWorkOrders = workOrders.filter((workOrder) => {
     const search = searchTerm.toLowerCase();
@@ -68,6 +92,12 @@ export default function WorkOrdersPage() {
               Create, schedule, and track service work orders.
             </p>
           </div>
+
+          {error && (
+  <div className="mt-6 rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300">
+    {error}
+  </div>
+)}
 
           <Link
             href="/work-orders/new"

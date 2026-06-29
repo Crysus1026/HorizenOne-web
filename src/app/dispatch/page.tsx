@@ -1,15 +1,14 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { getCompanyCollection } from "@/lib/companyQueries";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  collection,
-  doc,
-  getDocs,
-  orderBy,
-  query,
   updateDoc,
+  doc,
+  orderBy,
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -49,9 +48,15 @@ type Technician = {
 const STATUS_COLUMNS = ["Scheduled", "Assigned", "Completed", "Closed"];
 
 export default function DispatchPage() {
+  const {
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+} = useUserProfile();
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [selectedWorkOrder, setSelectedWorkOrder] = useState<WorkOrder | null>(
@@ -63,54 +68,58 @@ export default function DispatchPage() {
   const [dateFilter, setDateFilter] = useState("today");
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError("");
+useEffect(() => {
+  if (isLoadingProfile) return;
 
-        const workOrdersQuery = query(
-          collection(db, "workOrders"),
+  if (profileError) {
+    setError(profileError);
+    setIsLoading(false);
+    return;
+  }
+
+  if (!isSystemAdmin && !companyId) {
+    setError("User is missing companyId.");
+    setIsLoading(false);
+    return;
+  }
+
+  async function loadDispatchData() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const workOrdersData = await getCompanyCollection<WorkOrder>(
+        "workOrders",
+        companyId,
+        isSystemAdmin,
+        [
           where("isActive", "==", true),
-          orderBy("scheduledDate", "asc")
-        );
+          orderBy("scheduledDate", "asc"),
+        ]
+      );
 
-        const usersQuery = query(
-          collection(db, "users"),
-          where("role", "==", "Technician")
-        );
+      const techniciansData = await getCompanyCollection<Technician>(
+        "users",
+        companyId,
+        isSystemAdmin,
+        [
+          where("role", "==", "Technician"),
+        ]
+      );
 
-        const [workOrdersSnap, usersSnap] = await Promise.all([
-          getDocs(workOrdersQuery),
-          getDocs(usersQuery),
-        ]);
+      setTechnicians(techniciansData);
 
-        const loadedWorkOrders: WorkOrder[] = workOrdersSnap.docs.map(
-          (document) => ({
-            id: document.id,
-            ...(document.data() as Omit<WorkOrder, "id">),
-          })
-        );
-
-        const loadedTechnicians: Technician[] = usersSnap.docs.map(
-          (document) => ({
-            id: document.id,
-            ...(document.data() as Omit<Technician, "id">),
-          })
-        );
-
-        setWorkOrders(loadedWorkOrders);
-        setTechnicians(loadedTechnicians);
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load the dispatch board.");
-      } finally {
-        setLoading(false);
-      }
+      setWorkOrders(workOrdersData);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load dispatch board.");
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    loadData();
-  }, []);
+  loadDispatchData();
+}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
 
   const filteredWorkOrders = useMemo(() => {
   return workOrders.filter(
@@ -462,7 +471,7 @@ function isWithinDateFilter(workOrder: WorkOrder) {
           </div>
         )}
 
-        {loading ? (
+        {isLoading ? (
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 text-slate-300">
             Loading dispatch board...
           </div>

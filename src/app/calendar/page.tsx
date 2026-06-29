@@ -2,6 +2,8 @@
 
 import AppShell from "@/components/AppShell";
 import Link from "next/link";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { getCompanyCollection } from "@/lib/companyQueries";
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -89,6 +91,12 @@ function getStartMinutes(timeWindow?: string) {
 }
 
 export default function CalendarPage() {
+  const {
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+} = useUserProfile();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -100,103 +108,101 @@ export default function CalendarPage() {
     [selectedDate]
   );
 
-  const assignedCount = workOrders.filter(
+  const selectedDateWorkOrders = useMemo(() => {
+  return workOrders.filter(
+    (workOrder) =>
+      workOrder.scheduledDate === selectedDateString &&
+      isCalendarStatus(workOrder.status)
+  );
+}, [workOrders, selectedDateString]);
+
+  const assignedCount = selectedDateWorkOrders.filter(
     (workOrder) => workOrder.status?.toLowerCase() === "assigned"
   ).length;
 
-  const completedCount = workOrders.filter(
+  const completedCount = selectedDateWorkOrders.filter(
     (workOrder) => workOrder.status?.toLowerCase() === "completed"
   ).length;
 
-  const verifiedCount = workOrders.filter(
+  const verifiedCount = selectedDateWorkOrders.filter(
     (workOrder) => workOrder.status?.toLowerCase() === "verified"
   ).length;
 
   const openTechniciansCount = technicians.filter((technician) => {
-    return workOrders.some(
+    return selectedDateWorkOrders.some(
       (workOrder) =>
         workOrder.assignedTechnicianId === technician.id ||
         workOrder.assignedTechnicianName === technician.name
     );
   }).length;
 
-  useEffect(() => {
-    async function loadCalendarData() {
-      try {
-        setIsLoading(true);
-        setError("");
+useEffect(() => {
+  if (isLoadingProfile) return;
 
-        const techniciansQuery = query(
-          collection(db, "users"),
-          where("role", "==", "Technician"),
+  if (profileError) {
+    setError(profileError);
+    setIsLoading(false);
+    return;
+  }
+
+  if (!isSystemAdmin && !companyId) {
+    setError("User is missing companyId.");
+    setIsLoading(false);
+    return;
+  }
+
+  async function loadCalendarData() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const workOrdersData = await getCompanyCollection<WorkOrder>(
+        "workOrders",
+        companyId,
+        isSystemAdmin,
+        [
           where("isActive", "==", true),
-          orderBy("name", "asc")
-        );
+          orderBy("scheduledDate", "asc"),
+        ]
+      );
 
-        const workOrdersQuery = query(
-          collection(db, "workOrders"),
-          where("scheduledDate", "==", selectedDateString)
-        );
+      const techniciansData = await getCompanyCollection<Technician>(
+        "users",
+        companyId,
+        isSystemAdmin,
+        [
+          where("role", "==", "Technician"),
+        ]
+      );
 
-        const [techniciansSnap, workOrdersSnap] = await Promise.all([
-          getDocs(techniciansQuery),
-          getDocs(workOrdersQuery),
-        ]);
-
-        const techniciansData = techniciansSnap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Technician[];
-
-        const loadedWorkOrders = workOrdersSnap.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as WorkOrder[];
-
-        const workOrdersData = loadedWorkOrders.filter(
+      const sortedTechnicians = [...techniciansData].sort((a, b) => {
+        const aCount = workOrdersData.filter(
           (workOrder) =>
-            workOrder.isActive !== false &&
-            isCalendarStatus(workOrder.status)
-        );
+            workOrder.assignedTechnicianId === a.id ||
+            workOrder.assignedTechnicianName === a.name
+        ).length;
 
-        const activeTechnicians = techniciansData.filter((technician) => {
-  const appointmentCount = workOrdersData.filter(
-    (workOrder) =>
-      workOrder.assignedTechnicianId === technician.id ||
-      workOrder.assignedTechnicianName === technician.name
-  ).length;
+        const bCount = workOrdersData.filter(
+          (workOrder) =>
+            workOrder.assignedTechnicianId === b.id ||
+            workOrder.assignedTechnicianName === b.name
+        ).length;
 
-  return appointmentCount > 0;
-});
+        return bCount - aCount;
+      });
 
-const sortedTechnicians = activeTechnicians.sort((a, b) => {
-  const aCount = workOrdersData.filter(
-    (workOrder) =>
-      workOrder.assignedTechnicianId === a.id ||
-      workOrder.assignedTechnicianName === a.name
-  ).length;
-
-  const bCount = workOrdersData.filter(
-    (workOrder) =>
-      workOrder.assignedTechnicianId === b.id ||
-      workOrder.assignedTechnicianName === b.name
-  ).length;
-
-  return bCount - aCount;
-});
-
-setTechnicians(sortedTechnicians);
-setWorkOrders(workOrdersData);
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load calendar.");
-      } finally {
-        setIsLoading(false);
-      }
+      setTechnicians(sortedTechnicians);
+      setWorkOrders(workOrdersData);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load calendar.");
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    loadCalendarData();
-  }, [selectedDateString]);
+  loadCalendarData();
+}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
 
   function moveDay(amount: number) {
     const nextDate = new Date(selectedDate);
@@ -219,7 +225,7 @@ setWorkOrders(workOrdersData);
 }
 
   function getWorkOrdersForTechnician(technician: Technician) {
-    return workOrders
+    return selectedDateWorkOrders
       .filter(
         (workOrder) =>
           workOrder.assignedTechnicianId === technician.id ||
@@ -243,6 +249,12 @@ setWorkOrders(workOrdersData);
               {formatDisplayDate(selectedDate)}
             </p>
           </div>
+
+          {error && (
+            <div className="mt-6 rounded-lg border border-red-800 bg-red-950 p-3 text-sm text-red-300">
+              {error}
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <button
