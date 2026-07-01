@@ -190,7 +190,7 @@ export default function CustomerSchedulePage() {
             <h2 className="text-xl font-semibold">Terms & Conditions</h2>
             <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm text-slate-300">
               <p>
-                Insert your Terms & Conditions here.
+                Terms & Conditions here.
               </p>
             </div>
           </section>
@@ -212,7 +212,7 @@ export default function CustomerSchedulePage() {
             <h2 className="text-xl font-semibold">Waiver</h2>
             <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm text-slate-300">
               <p>
-                Insert your waiver document here.
+                Waiver document here.
               </p>
             </div>
           </section>
