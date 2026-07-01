@@ -46,6 +46,16 @@ type WorkOrder = {
   completionData?: Record<string, any>;
   completionDevices?: any[];
   completionPhotoUrls?: string[];
+  customerScheduleToken?: string;
+  customerScheduleTokenUsed?: boolean;
+  customerAcceptedTerms?: boolean;
+  customerAcceptedWaiver?: boolean;
+  customerAcceptedAt?: any;
+  customerScheduledAt?: any;
+  customerSignatureName?: string;
+  customerSignatureConfirmed?: boolean;
+  customerSignedAt?: any;
+  scheduledBy?: string;
   photoUrls?: string[];
   isActive: boolean;
 };
@@ -66,6 +76,8 @@ export default function WorkOrderDetailPage() {
   const router = useRouter();
 
   const workOrderId = params.id as string;
+
+  const [copyMessage, setCopyMessage] = useState("");
 
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,6 +180,28 @@ setInstalledInventoryUnits(installedInventoryData);
   } finally {
     setSaving(false);
   }
+}
+
+async function handleCopyCustomerLink() {
+  if (!workOrder?.customerScheduleToken) return;
+
+  const link = `${window.location.origin}/customer-schedule/${workOrder.customerScheduleToken}`;
+
+  await navigator.clipboard.writeText(link);
+
+  setCopyMessage("Customer confirmation link copied.");
+
+  setTimeout(() => {
+    setCopyMessage("");
+  }, 3000);
+}
+
+function handleOpenCustomerLink() {
+  if (!workOrder?.customerScheduleToken) return;
+
+  const link = `${window.location.origin}/customer-schedule/${workOrder.customerScheduleToken}`;
+
+  window.open(link, "_blank");
 }
 
 async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -485,6 +519,103 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
             <span className="font-semibold text-white">
               {workOrder.status}
             </span>
+          </div>
+
+          <div
+            className={`mt-6 rounded-xl border p-5 ${
+              workOrder.customerScheduleTokenUsed
+                ? "border-green-500/40 bg-green-950/20"
+                : "border-yellow-500/40 bg-yellow-950/20"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  {workOrder.customerScheduleTokenUsed
+                    ? "Appointment Confirmed"
+                    : "Customer Confirmations"}
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-300">
+                  {workOrder.customerScheduleTokenUsed
+                    ? "The customer has confirmed the appointment and accepted the required documents."
+                    : "Send this link to the customer so they can accept the documents and select an installation window."}
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  workOrder.customerScheduleTokenUsed
+                    ? "bg-green-500/20 text-green-300"
+                    : "bg-yellow-500/20 text-yellow-300"
+                }`}
+              >
+                {workOrder.customerScheduleTokenUsed ? "Confirmed" : "Awaiting Customer"}
+              </span>
+            </div>
+
+            {!workOrder.customerScheduleTokenUsed && workOrder.customerScheduleToken && (
+              <div className="mt-5">
+                <p className="text-sm font-medium text-slate-300">
+                  Customer Confirmation Link
+                </p>
+
+                <p className="mt-2 break-all rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-cyan-300">
+                  {`${window.location.origin}/customer-schedule/${workOrder.customerScheduleToken}`}
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCopyCustomerLink}
+                    className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+                  >
+                    Copy Link
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenCustomerLink}
+                    className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    Open Page
+                  </button>
+                </div>
+
+                {copyMessage && (
+                  <p className="mt-3 text-sm text-green-300">{copyMessage}</p>
+                )}
+              </div>
+            )}
+
+            {workOrder.customerScheduleTokenUsed && (
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <DetailItem
+                  label="Installation Date"
+                  value={workOrder.scheduledDate || "Not selected"}
+                />
+
+                <DetailItem
+                  label="Time Window"
+                  value={workOrder.timeWindow || "Not selected"}
+                />
+
+                <DetailItem
+                  label="Terms Accepted"
+                  value={workOrder.customerAcceptedTerms ? "Yes" : "No"}
+                />
+
+                <DetailItem
+                  label="Waiver Accepted"
+                  value={workOrder.customerAcceptedWaiver ? "Yes" : "No"}
+                />
+
+                <DetailItem
+                  label="Electronic Signature"
+                  value={workOrder.customerSignatureName || "Not provided"}
+                />
+              </div>
+            )}
           </div>
         </div>
 

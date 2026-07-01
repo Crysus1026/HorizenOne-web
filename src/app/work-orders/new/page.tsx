@@ -68,6 +68,10 @@ type CompletionFormTemplate = {
   isActive?: boolean;
 };
 
+function generateScheduleToken() {
+  return crypto.randomUUID();
+}
+
 function NewWorkOrderPageContent() {
   const router = useRouter();
 
@@ -306,6 +310,14 @@ function NewWorkOrderPageContent() {
 
         assignedTechnicianId: "",
         assignedTechnicianName: "",
+
+        customerScheduleToken: generateScheduleToken(),
+        customerScheduleTokenUsed: false,
+        customerAcceptedTerms: false,
+        customerAcceptedWaiver: false,
+        customerAcceptedAt: null,
+        customerScheduledAt: null,
+        scheduledBy: "dispatcher",
 
         notes,
         isActive: true,
