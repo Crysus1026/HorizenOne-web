@@ -33,6 +33,10 @@ type WorkOrder = {
   completionFormTemplateName?: string;
   customerId: string;
   customerName: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   serviceTypeId: string;
   serviceTypeName: string;
   serviceDurationMinutes: number;
@@ -323,6 +327,18 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
 <DetailItem
   label="Company"
   value={workOrder.companyName || workOrder.companyId || "—"}
+/>
+
+<DetailItem
+  label="Address"
+  value={[
+    workOrder.address,
+    workOrder.city,
+    workOrder.state,
+    workOrder.zip,
+  ]
+    .filter(Boolean)
+    .join(", ") || "Not provided"}
 />
 
 <DetailItem
