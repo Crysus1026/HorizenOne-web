@@ -77,6 +77,7 @@ export default function InventoryItemDetailPage() {
 
   const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [assignSearch, setAssignSearch] = useState("");
 
   const [statusActionUnitId, setStatusActionUnitId] = useState("");
   const [statusActionNotes, setStatusActionNotes] = useState("");
@@ -166,6 +167,20 @@ export default function InventoryItemDetailPage() {
     );
   }, [units]);
 
+  const filteredAssignableUnits = useMemo(() => {
+    const search = assignSearch.trim().toLowerCase();
+
+    if (!search) return assignableUnits;
+
+    return assignableUnits.filter((unit) => {
+      return (
+        unit.serialNumber.toLowerCase().includes(search) ||
+        unit.locationName?.toLowerCase().includes(search) ||
+        unit.itemName?.toLowerCase().includes(search)
+      );
+    });
+  }, [assignableUnits, assignSearch]);
+
   const technicianFilterOptions = useMemo(() => {
     const technicianMap = new Map<string, string>();
 
@@ -220,7 +235,7 @@ export default function InventoryItemDetailPage() {
   }
 
   function toggleSelectAllAvailable() {
-    const availableIds = assignableUnits.map((unit) => unit.id);
+    const availableIds = filteredAssignableUnits.map((unit) => unit.id);
 
     if (selectedUnitIds.length === availableIds.length) {
       setSelectedUnitIds([]);
@@ -736,6 +751,18 @@ X2S-1003`}
             at once.
           </p>
 
+          <label className="mt-4 block">
+            <span className="text-sm font-medium text-slate-300">
+              Search Available Inventory
+            </span>
+            <input
+              value={assignSearch}
+              onChange={(event) => setAssignSearch(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+              placeholder="Search by serial number, item, or location..."
+            />
+          </label>
+
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="text-sm font-medium text-slate-300">
@@ -784,9 +811,13 @@ X2S-1003`}
               <p className="p-4 text-sm text-slate-400">
                 No available units to assign.
               </p>
-            ) : (
-              <div className="max-h-72 overflow-y-auto">
-                {assignableUnits.map((unit) => (
+              ) : filteredAssignableUnits.length === 0 ? (
+                <p className="p-4 text-sm text-slate-400">
+                  No available units match your search.
+                </p>
+              ) : (
+                <div className="max-h-72 overflow-y-auto">
+                  {filteredAssignableUnits.map((unit) => (
                   <label
                     key={unit.id}
                     className="flex cursor-pointer items-center justify-between border-b border-slate-800 px-4 py-3 text-sm hover:bg-slate-800/60"
