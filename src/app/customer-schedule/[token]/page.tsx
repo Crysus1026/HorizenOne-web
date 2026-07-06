@@ -1,6 +1,6 @@
 "use client";
 
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import {
   collection,
   doc,
@@ -10,6 +10,8 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import jsPDF from "jspdf";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -88,6 +90,62 @@ export default function CustomerSchedulePage() {
     }
   }, [token]);
 
+  async function generateAndUploadReceipt() {
+  if (!workOrder) {
+    throw new Error("Work order not loaded.");
+  }
+
+  const confirmationNumber = `HO-${Date.now()}`;
+  const signedAt = new Date().toLocaleString();
+
+  const pdf = new jsPDF();
+
+  pdf.setFontSize(18);
+  pdf.text("Customer Confirmation Receipt", 20, 20);
+
+  pdf.setFontSize(11);
+  pdf.text(`Confirmation Number: ${confirmationNumber}`, 20, 35);
+  pdf.text(`Customer: ${workOrder.customerName || "Not provided"}`, 20, 45);
+  pdf.text(
+    `Address: ${workOrder.address || workOrder.customerAddress || "Not provided"}`,
+    20,
+    55
+  );
+  pdf.text(`Service: ${workOrder.serviceTypeName || "Installation"}`, 20, 65);
+  pdf.text(`Installation Date: ${selectedDate}`, 20, 75);
+  pdf.text(`Time Window: ${selectedWindow}`, 20, 85);
+
+  pdf.text("Customer Acknowledgments", 20, 105);
+  pdf.text("Terms & Conditions Accepted: Yes", 20, 115);
+  pdf.text("Waiver Accepted: Yes", 20, 125);
+
+  pdf.text("Electronic Signature", 20, 145);
+  pdf.text(`Typed Name: ${signatureName.trim()}`, 20, 155);
+  pdf.text(`Signed At: ${signedAt}`, 20, 165);
+
+  pdf.text("Document References", 20, 185);
+  pdf.text("Terms & Conditions: /documents/terms-and-conditions.pdf", 20, 195);
+  pdf.text("Waiver: /documents/waiver.pdf", 20, 205);
+
+  const pdfBlob = pdf.output("blob");
+
+  const receiptRef = ref(
+    storage,
+    `customer-confirmation-receipts/${workOrder.id}.pdf`
+  );
+
+  await uploadBytes(receiptRef, pdfBlob, {
+    contentType: "application/pdf",
+  });
+
+  const receiptUrl = await getDownloadURL(receiptRef);
+
+  return {
+    confirmationNumber,
+    receiptUrl,
+  };
+}
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -113,6 +171,8 @@ export default function CustomerSchedulePage() {
       setIsSubmitting(true);
       setError("");
 
+      const receipt = await generateAndUploadReceipt();
+
       await updateDoc(doc(db, "workOrders", workOrder.id), {
         scheduledDate: selectedDate,
         timeWindow: selectedWindow,
@@ -127,6 +187,8 @@ export default function CustomerSchedulePage() {
         customerScheduleTokenUsed: true,
         scheduledBy: "customer",
         updatedAt: serverTimestamp(),
+        customerConfirmationNumber: receipt.confirmationNumber,
+        customerConfirmationReceiptUrl: receipt.receiptUrl,
       });
 
       setSuccessMessage("Your installation has been scheduled successfully.");
@@ -188,11 +250,20 @@ export default function CustomerSchedulePage() {
         <form onSubmit={handleSubmit} className="mt-6 space-y-6">
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
             <h2 className="text-xl font-semibold">Terms & Conditions</h2>
-            <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm text-slate-300">
-              <p>
-                Terms & Conditions here.
-              </p>
-            </div>
+              <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950 p-4">
+                <p className="text-sm text-slate-300">
+                  Please review the Terms & Conditions before continuing.
+                </p>
+
+                <a
+                  href="/documents/terms-and-conditions.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+                >
+                  View Terms & Conditions
+                </a>
+              </div>
           </section>
 
             <label className="mt-4 flex items-start gap-3">
@@ -210,11 +281,20 @@ export default function CustomerSchedulePage() {
 
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
             <h2 className="text-xl font-semibold">Waiver</h2>
-            <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm text-slate-300">
-              <p>
-                Waiver document here.
-              </p>
-            </div>
+              <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950 p-4">
+                <p className="text-sm text-slate-300">
+                  Please review the waiver before continuing.
+                </p>
+
+                <a
+                  href="/documents/waiver.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+                >
+                  View Waiver
+                </a>
+              </div>
           </section>
 
             <label className="mt-4 flex items-start gap-3">
