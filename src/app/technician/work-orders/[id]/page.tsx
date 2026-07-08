@@ -78,12 +78,14 @@ type CompletionTemplate = {
 
 type CompletionDevice = {
   id: string;
-  deviceTypeId?: string;
-  deviceTypeName?: string;
+  thermostatType?: string;
+  inventoryUnitId?: string;
+  inventoryItemId?: string;
+  itemName?: string;
   serialNumber?: string;
   location?: string;
+  systemType?: string;
   notes?: string;
-  completionData: Record<string, CompletionValue>;
 };
 
 type InventoryUnit = {
@@ -211,21 +213,25 @@ export default function TechnicianWorkOrderPage() {
   }
 
   function handleAddCompletionDevice() {
-  setCompletionDevices((current) => [
-    ...current,
-    {
-      id: crypto.randomUUID(),
-      serialNumber: "",
-      location: "",
-      notes: "",
-      completionData: {},
-    },
-  ]);
-}
+    setCompletionDevices((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        thermostatType: "",
+        inventoryUnitId: "",
+        inventoryItemId: "",
+        itemName: "",
+        serialNumber: "",
+        location: "",
+        systemType: "",
+        notes: "",
+      },
+    ]);
+  }
 
 function handleCompletionDeviceChange(
   deviceId: string,
-  fieldName: "serialNumber" | "location" | "notes",
+  fieldName: "thermostatType" | "location" | "systemType" | "notes",
   value: string
 ) {
   setCompletionDevices((current) =>
@@ -240,20 +246,23 @@ function handleCompletionDeviceChange(
   );
 }
 
-function handleCompletionDeviceFieldChange(
+function handleCompletionDeviceInventoryChange(
   deviceId: string,
-  fieldId: string,
-  value: CompletionValue
+  inventoryUnitId: string
 ) {
+  const selectedUnit = assignedInventoryUnits.find(
+    (unit) => unit.id === inventoryUnitId
+  );
+
   setCompletionDevices((current) =>
     current.map((device) =>
       device.id === deviceId
         ? {
             ...device,
-            completionData: {
-              ...device.completionData,
-              [fieldId]: value,
-            },
+            inventoryUnitId,
+            inventoryItemId: selectedUnit?.inventoryItemId || "",
+            itemName: selectedUnit?.itemName || "",
+            serialNumber: selectedUnit?.serialNumber || "",
           }
         : device
     )
@@ -332,34 +341,26 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     }
 
     for (const device of completionDevices) {
-  if (!device.serialNumber?.trim()) {
-    setCompletionError("Each added device needs a serial number.");
-    return false;
-  }
+      if (!device.thermostatType?.trim()) {
+        setCompletionError("Each added device needs a thermostat type.");
+        return false;
+      }
 
-  if (!device.location?.trim()) {
-    setCompletionError("Each added device needs a location.");
-    return false;
-  }
+      if (!device.inventoryUnitId?.trim()) {
+        setCompletionError("Each added device needs a selected inventory serial number.");
+        return false;
+      }
 
-  for (const field of completionTemplate.fields) {
-    if (!field.required) continue;
+      if (!device.location?.trim()) {
+        setCompletionError("Each added device needs an install location.");
+        return false;
+      }
 
-    const value = device.completionData[field.fieldKey];
-
-    if (
-      value === undefined ||
-      value === null ||
-      value === "" ||
-      value === false
-    ) {
-      setCompletionError(
-        `${field.label} is required for each added device.`
-      );
-      return false;
+      if (!device.systemType?.trim()) {
+        setCompletionError("Each added device needs a system type.");
+        return false;
+      }
     }
-  }
-}
 
     setCompletionError("");
     return true;
@@ -644,182 +645,147 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     </button>
   </div>
 
-  {completionDevices.length > 0 && (
-    <div className="mt-4 space-y-4">
-      {completionDevices.map((device, deviceIndex) => (
-        <div
-          key={device.id}
-          className="rounded-lg border border-zinc-800 bg-black p-4"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="font-semibold text-cyan-400">
-              Device {deviceIndex + 1}
-            </h4>
-
-            <button
-              type="button"
-              onClick={() => handleRemoveCompletionDevice(device.id)}
-              className="text-sm text-red-400"
+      {completionDevices.length > 0 && (
+        <div className="mt-4 space-y-4">
+          {completionDevices.map((device, deviceIndex) => (
+            <div
+              key={device.id}
+              className="rounded-lg border border-zinc-800 bg-black p-4"
             >
-              Remove
-            </button>
-          </div>
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="font-semibold text-cyan-400">
+                  Device {deviceIndex + 1}
+                </h4>
 
-          <div className="mt-4 grid gap-4">
-            <div>
-              <label className="block text-sm text-zinc-400">
-                Serial Number *
-              </label>
-              <input
-                value={device.serialNumber || ""}
-                onChange={(e) =>
-                  handleCompletionDeviceChange(
-                    device.id,
-                    "serialNumber",
-                    e.target.value
-                  )
-                }
-                className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
-              />
-            </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCompletionDevice(device.id)}
+                  className="text-sm text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
 
-            <div>
-              <label className="block text-sm text-zinc-400">
-                Location *
-              </label>
-              <input
-                value={device.location || ""}
-                onChange={(e) =>
-                  handleCompletionDeviceChange(
-                    device.id,
-                    "location",
-                    e.target.value
-                  )
-                }
-                placeholder="Example: Basement, attic, outdoor unit"
-                className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
-              />
-            </div>
-
-            {completionTemplate?.fields.map((field, index) => {
-              const value = device.completionData[field.fieldKey];
-
-              return (
-                <div key={`${device.id}-${field.fieldKey || "field"}-${index}`}>
-                  <label className="block text-sm font-medium text-zinc-300">
-                    {field.label}
-                    {field.required && (
-                      <span className="text-red-400"> *</span>
-                    )}
+              <div className="mt-4 grid gap-4">
+                <div>
+                  <label className="block text-sm text-zinc-400">
+                    Thermostat Type *
                   </label>
 
-                  {field.type === "text" && (
-                    <input
-                      value={String(value ?? "")}
-                      onChange={(e) =>
-                        handleCompletionDeviceFieldChange(
-                          device.id,
-                          field.fieldKey,
-                          e.target.value
-                        )
-                      }
-                      className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
-                    />
-                  )}
+                  <input
+                    value={device.thermostatType || ""}
+                    onChange={(e) =>
+                      handleCompletionDeviceChange(
+                        device.id,
+                        "thermostatType",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Example: X2S Smart Thermostat"
+                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
+                  />
+                </div>
 
-                  {field.type === "number" && (
-                    <input
-                      type="number"
-                      value={String(value ?? "")}
-                      onChange={(e) =>
-                        handleCompletionDeviceFieldChange(
-                          device.id,
-                          field.fieldKey,
-                          e.target.value
-                        )
-                      }
-                      className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
-                    />
-                  )}
+                <div>
+                  <label className="block text-sm text-zinc-400">
+                    Serial Number *
+                  </label>
 
-                  {field.type === "textarea" && (
-                    <textarea
-                      value={String(value ?? "")}
-                      onChange={(e) =>
-                        handleCompletionDeviceFieldChange(
-                          device.id,
-                          field.fieldKey,
-                          e.target.value
-                        )
-                      }
-                      rows={3}
-                      className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
-                    />
-                  )}
+                  <select
+                    value={device.inventoryUnitId || ""}
+                    onChange={(e) =>
+                      handleCompletionDeviceInventoryChange(
+                        device.id,
+                        e.target.value
+                      )
+                    }
+                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
+                  >
+                    <option value="">Select inventory device</option>
 
-                  {field.type === "select" && (
-                    <select
-                      value={String(value ?? "")}
-                      onChange={(e) =>
-                        handleCompletionDeviceFieldChange(
-                          device.id,
-                          field.fieldKey,
-                          e.target.value
-                        )
-                      }
-                      className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
-                    >
-                      <option value="">Select one</option>
-                      {(field.options ?? []).map((option) => (
-                        <option key={option} value={option}>
-                          {option}
+                    {assignedInventoryUnits
+                      .filter(
+                        (unit) =>
+                          unit.id === device.inventoryUnitId ||
+                          !completionDevices.some(
+                            (selectedDevice) =>
+                              selectedDevice.inventoryUnitId === unit.id &&
+                              selectedDevice.id !== device.id
+                          )
+                      )
+                      .map((unit) => (
+                        <option key={unit.id} value={unit.id}>
+                          {unit.itemName} - {unit.serialNumber}
                         </option>
                       ))}
-                    </select>
-                  )}
+                  </select>
 
-                  {field.type === "checkbox" && (
-                    <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(value)}
-                        onChange={(e) =>
-                          handleCompletionDeviceFieldChange(
-                            device.id,
-                            field.fieldKey,
-                            e.target.checked
-                          )
-                        }
-                      />
-                      Yes
-                    </label>
-                  )}
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Only inventory assigned to this technician appears here.
+                  </p>
                 </div>
-              );
-            })}
 
-            <div>
-              <label className="block text-sm text-zinc-400">
-                Device Notes
-              </label>
-              <textarea
-                value={device.notes || ""}
-                onChange={(e) =>
-                  handleCompletionDeviceChange(
-                    device.id,
-                    "notes",
-                    e.target.value
-                  )
-                }
-                rows={3}
-                className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
-              />
+                <div>
+                  <label className="block text-sm text-zinc-400">
+                    Install Location *
+                  </label>
+
+                  <input
+                    value={device.location || ""}
+                    onChange={(e) =>
+                      handleCompletionDeviceChange(
+                        device.id,
+                        "location",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Example: Hallway, basement, bedroom"
+                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-400">
+                    System Type *
+                  </label>
+
+                  <input
+                    value={device.systemType || ""}
+                    onChange={(e) =>
+                      handleCompletionDeviceChange(
+                        device.id,
+                        "systemType",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Example: Heat Pump, Gas Furnace, AC"
+                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-400">
+                    Device Notes
+                  </label>
+
+                  <textarea
+                    value={device.notes || ""}
+                    onChange={(e) =>
+                      handleCompletionDeviceChange(
+                        device.id,
+                        "notes",
+                        e.target.value
+                      )
+                    }
+                    rows={3}
+                    className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-white outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
-      ))}
-    </div>
-  )}
+      )}
 </div>
 
 <div className="mt-6">
