@@ -816,30 +816,6 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
       )}
 </div>
 
-<div className="mt-6">
-  <label className="block text-sm font-medium text-zinc-300">
-    Installed Device
-  </label>
-
-  <select
-    value={selectedInventoryUnitId}
-    onChange={(event) => setSelectedInventoryUnitId(event.target.value)}
-    className="mt-2 w-full rounded-md border border-zinc-700 bg-black p-3 text-white outline-none focus:border-cyan-500"
-  >
-    <option value="">No inventory device installed</option>
-
-    {assignedInventoryUnits.map((unit) => (
-      <option key={unit.id} value={unit.id}>
-        {unit.itemName} - {unit.serialNumber}
-      </option>
-    ))}
-  </select>
-
-  <p className="mt-2 text-xs text-zinc-500">
-    Only inventory assigned to this technician appears here.
-  </p>
-</div>
-
 <div className="mt-6 rounded-lg border border-zinc-800 bg-black p-4">
   <h3 className="text-base font-bold text-white">Photos</h3>
 
