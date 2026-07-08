@@ -443,15 +443,43 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
           {field.required && <span className="text-red-400"> *</span>}
         </label>
 
-        {field.type === "text" && (
-          <input
-            value={String(value ?? "")}
-            onChange={(e) =>
-              handleCompletionFieldChange(field.fieldKey, e.target.value)
-            }
-            className={sharedClassName}
-          />
-        )}
+        {field.type === "text" && field.label.toLowerCase().includes("serial") && (
+  <select
+    value={selectedInventoryUnitId}
+    onChange={(e) => {
+      const unitId = e.target.value;
+      const selectedUnit = assignedInventoryUnits.find(
+        (unit) => unit.id === unitId
+      );
+
+      setSelectedInventoryUnitId(unitId);
+
+      handleCompletionFieldChange(
+        field.fieldKey,
+        selectedUnit?.serialNumber || ""
+      );
+    }}
+    className={sharedClassName}
+  >
+    <option value="">Select inventory device</option>
+
+    {assignedInventoryUnits.map((unit) => (
+      <option key={unit.id} value={unit.id}>
+        {unit.itemName} - {unit.serialNumber}
+      </option>
+    ))}
+  </select>
+)}
+
+{field.type === "text" && !field.label.toLowerCase().includes("serial") && (
+  <input
+    value={String(value ?? "")}
+    onChange={(e) =>
+      handleCompletionFieldChange(field.fieldKey, e.target.value)
+    }
+    className={sharedClassName}
+  />
+)}
 
         {field.type === "number" && (
           <input
