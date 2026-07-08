@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -15,7 +16,8 @@ import {
   where,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 type CompletionValue = string | number | boolean;
 
@@ -42,6 +44,7 @@ type WorkOrder = {
   completionDevices?: CompletionDevice[];
   completionData?: Record<string, CompletionValue>;
   completionPhotoUrls?: string[];
+  photoUrls?: string[];
   completedAt?: unknown;
   completedByTechnicianId?: string;
   completedByTechnicianName?: string;
@@ -109,6 +112,8 @@ export default function TechnicianWorkOrderPage() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [error, setError] = useState("");
   const [completionError, setCompletionError] = useState("");
+
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const [completionDevices, setCompletionDevices] = useState<CompletionDevice[]>([]);
 
@@ -259,6 +264,47 @@ function handleRemoveCompletionDevice(deviceId: string) {
   setCompletionDevices((current) =>
     current.filter((device) => device.id !== deviceId)
   );
+}
+
+async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  if (!workOrderId || !workOrder) return;
+
+  const file = e.target.files?.[0];
+
+  if (!file) return;
+
+  setUploadingPhoto(true);
+
+  try {
+    const filePath = `workOrders/${workOrderId}/photos/${Date.now()}-${file.name}`;
+    const storageRef = ref(storage, filePath);
+
+    await uploadBytes(storageRef, file);
+
+    const downloadUrl = await getDownloadURL(storageRef);
+
+    const workOrderRef = doc(db, "workOrders", workOrderId);
+
+    await updateDoc(workOrderRef, {
+      photoUrls: arrayUnion(downloadUrl),
+      updatedAt: serverTimestamp(),
+    });
+
+    setWorkOrder((prev) =>
+      prev
+        ? {
+            ...prev,
+            photoUrls: [...(prev.photoUrls || []), downloadUrl],
+          }
+        : prev
+    );
+  } catch (err) {
+    console.error("Error uploading photo:", err);
+    alert("Failed to upload photo.");
+  } finally {
+    setUploadingPhoto(false);
+    e.target.value = "";
+  }
 }
 
   function validateCompletionForm() {
@@ -798,6 +844,55 @@ function handleRemoveCompletionDevice(deviceId: string) {
   <p className="mt-2 text-xs text-zinc-500">
     Only inventory assigned to this technician appears here.
   </p>
+</div>
+
+<div className="mt-6 rounded-lg border border-zinc-800 bg-black p-4">
+  <h3 className="text-base font-bold text-white">Photos</h3>
+
+  <p className="mt-1 text-sm text-zinc-500">
+    Upload job photos from the technician workflow.
+  </p>
+
+  <label className="mt-4 block">
+    <span className="mb-2 block text-sm font-medium text-zinc-300">
+      Upload Work Order Photo
+    </span>
+
+    <input
+      type="file"
+      accept="image/*"
+      capture="environment"
+      onChange={handlePhotoUpload}
+      disabled={uploadingPhoto}
+      className="block w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-sm text-zinc-300 file:mr-4 file:rounded-md file:border-0 file:bg-cyan-500 file:px-4 file:py-2 file:text-sm file:font-bold file:text-black hover:file:bg-cyan-400 disabled:opacity-50"
+    />
+  </label>
+
+  {uploadingPhoto && (
+    <p className="mt-3 text-sm text-cyan-400">Uploading photo...</p>
+  )}
+
+  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+    {(workOrder.photoUrls || []).length === 0 ? (
+      <p className="text-sm text-zinc-500">No photos uploaded yet.</p>
+    ) : (
+      workOrder.photoUrls?.map((url) => (
+        <a
+          key={url}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="overflow-hidden rounded-lg border border-zinc-800 bg-black"
+        >
+          <img
+            src={url}
+            alt="Work order upload"
+            className="h-40 w-full object-cover transition hover:opacity-80"
+          />
+        </a>
+      ))
+    )}
+  </div>
 </div>
 
               <label className="mt-6 block text-sm text-zinc-400">
