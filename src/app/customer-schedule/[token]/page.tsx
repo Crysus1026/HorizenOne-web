@@ -305,11 +305,14 @@ export default function CustomerSchedulePage() {
           scheduledBy: "customer",
         };
       });
-    } catch (submitError) {
+    } catch (submitError: unknown) {
       console.error("Unable to confirm installation:", submitError);
-      setError(
-        "Unable to confirm your installation. Please try again or contact the service provider."
-      );
+
+      if (submitError instanceof Error) {
+        setError(`Unable to confirm installation: ${submitError.message}`);
+      } else {
+        setError("Unable to confirm installation due to an unknown error.");
+      }
     } finally {
       setIsSubmitting(false);
     }
