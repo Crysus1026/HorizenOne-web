@@ -14,7 +14,6 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
 
 type UserProfile = {
   companyId?: string;
@@ -419,11 +418,13 @@ export default function InventoryPage() {
                               </p>
                             </div>
 
-                            <ChevronDown
-                              className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${
+                            <span
+                              className={`shrink-0 text-lg text-slate-400 transition-transform ${
                                 isExpanded ? "rotate-180" : ""
                               }`}
-                            />
+                            >
+                              ▼
+                            </span>
                           </button>
 
                           {isExpanded ? (
