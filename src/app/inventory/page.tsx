@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 type UserProfile = {
   companyId?: string;
@@ -57,6 +58,17 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [units, setUnits] = useState<InventoryUnit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [expandedTechnicians, setExpandedTechnicians] = useState<
+    Record<string, boolean>
+  >({});
+
+  function toggleTechnician(technicianName: string) {
+  setExpandedTechnicians((current) => ({
+    ...current,
+    [technicianName]: !current[technicianName],
+  }));
+}
 
   async function loadInventory(profile: UserProfile) {
     setIsLoading(true);
@@ -376,42 +388,73 @@ export default function InventoryPage() {
                   No inventory is currently assigned to technicians.
                 </p>
               ) : (
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  {Object.entries(assignedByTechnician).map(
-                    ([technicianName, technicianUnits]) => (
-                      <div
-                        key={technicianName}
-                        className="rounded-lg border border-slate-800 bg-black/40 p-4"
-                      >
-                        <div>
-                          <h3 className="font-semibold text-white">
-                            {technicianName}
-                          </h3>
-                          <p className="text-sm text-slate-500">
-                            {technicianUnits.length} assigned unit
-                            {technicianUnits.length === 1 ? "" : "s"}
-                          </p>
-                        </div>
-
-                        <div className="mt-4 space-y-2">
-                          {technicianUnits.map((unit) => (
-                            <Link
-                              key={unit.id}
-                              href={`/inventory/units/${unit.id}`}
-                              className="block rounded-md border border-slate-800 bg-slate-950 p-3 hover:border-cyan-500/50"
-                            >
-                              <p className="text-sm font-medium text-white">
-                                {unit.itemName || "Inventory Item"}
-                              </p>
-                              <p className="mt-1 text-sm text-cyan-400">
-                                {unit.serialNumber || "No serial number"}
-                              </p>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
+                <div className="mt-4 space-y-3">
+                  {Object.entries(assignedByTechnician)
+                    .sort(([technicianNameA], [technicianNameB]) =>
+                      technicianNameA.localeCompare(technicianNameB)
                     )
-                  )}
+                    .map(([technicianName, technicianUnits]) => {
+                      const isExpanded =
+                        expandedTechnicians[technicianName] === true;
+
+                      return (
+                        <div
+                          key={technicianName}
+                          className="overflow-hidden rounded-lg border border-slate-800 bg-black/40"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleTechnician(technicianName)}
+                            aria-expanded={isExpanded}
+                            className="flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-slate-900/60"
+                          >
+                            <div>
+                              <h3 className="font-semibold text-white">
+                                {technicianName}
+                              </h3>
+
+                              <p className="text-sm text-slate-500">
+                                {technicianUnits.length} assigned unit
+                                {technicianUnits.length === 1 ? "" : "s"}
+                              </p>
+                            </div>
+
+                            <ChevronDown
+                              className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${
+                                isExpanded ? "rotate-180" : ""
+                              }`}
+                            />
+                          </button>
+
+                          {isExpanded ? (
+                            <div className="space-y-2 border-t border-slate-800 p-4">
+                              {technicianUnits
+                                .slice()
+                                .sort((unitA, unitB) =>
+                                  (unitA.itemName || "").localeCompare(
+                                    unitB.itemName || ""
+                                  )
+                                )
+                                .map((unit) => (
+                                  <Link
+                                    key={unit.id}
+                                    href={`/inventory/units/${unit.id}`}
+                                    className="block rounded-md border border-slate-800 bg-slate-950 p-3 transition hover:border-cyan-500/50"
+                                  >
+                                    <p className="text-sm font-medium text-white">
+                                      {unit.itemName || "Inventory Item"}
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-cyan-400">
+                                      {unit.serialNumber || "No serial number"}
+                                    </p>
+                                  </Link>
+                                ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </section>
