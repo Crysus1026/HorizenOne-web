@@ -68,23 +68,6 @@ function technicianBelongsToProject(
   return technician.projectIds.includes(projectId);
 }
 
-  /*
-   * An empty projectIds array currently means that the technician
-   * is not restricted to a specific project.
-   *
-   * Change this to `return false` if every technician must be
-   * explicitly assigned to a project.
-   */
-  if (
-    !Array.isArray(technician.projectIds) ||
-    technician.projectIds.length === 0
-  ) {
-    return true;
-  }
-
-  return technician.projectIds.includes(projectId);
-}
-
 export async function GET(request: NextRequest) {
   try {
     const token = request.nextUrl.searchParams.get("token")?.trim();
