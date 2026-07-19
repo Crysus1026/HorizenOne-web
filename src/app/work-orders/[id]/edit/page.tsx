@@ -15,6 +15,10 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import {
+  getSchedulingWindowId,
+  getWeekdayFromDate,
+} from "@/lib/scheduling";
 
 type WorkOrder = {
   workOrderNumber?: string;
@@ -43,10 +47,19 @@ type WorkOrder = {
 type Technician = {
   id: string;
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   employeeId?: string;
+  companyId?: string;
+  projectIds?: string[];
   role?: string;
   isActive?: boolean;
+};
+
+type TechnicianAvailability = {
+  technicianId: string;
+  weeklySchedule: Record<string, string[]>;
 };
 
 type Project = {
@@ -99,8 +112,10 @@ export default function EditWorkOrderPage() {
   const [timeWindow, setTimeWindow] = useState("");
   const [notes, setNotes] = useState("");
   const [assignedTechnicianId, setAssignedTechnicianId] = useState("");
-  const [assignedTechnicianName, setAssignedTechnicianName] = useState("");
   const [technicians, setTechnicians] = useState<Technician[]>([]);
+
+  const [technicianConflicts, setTechnicianConflicts] =
+    useState<Record<string, string>>({});
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
@@ -110,6 +125,17 @@ export default function EditWorkOrderPage() {
 
   const [projectId, setProjectId] = useState("");
   const [deviceTypeId, setDeviceTypeId] = useState("");
+
+  const eligibleTechnicians = technicians.filter((technician) => {
+    if (!projectId) {
+      return false;
+    }
+
+    return (
+      Array.isArray(technician.projectIds) &&
+      technician.projectIds.includes(projectId)
+    );
+  });
 
   const filteredDeviceTypes = deviceTypes.filter(
     (deviceType) => deviceType.isActive !== false
@@ -124,56 +150,83 @@ export default function EditWorkOrderPage() {
   );
 
   useEffect(() => {
-    async function loadWorkOrder() {
-      if (!workOrderId) return;
+  async function loadTechnicians(companyId: string) {
+    const techniciansQuery = query(
+      collection(db, "users"),
+      where("role", "==", "Technician"),
+      where("isActive", "==", true),
+      where("companyId", "==", companyId)
+    );
 
-      try {
-        const ref = doc(db, "workOrders", workOrderId); 
-        const snap = await getDoc(ref);
+    const snap = await getDocs(techniciansQuery);
 
-        if (!snap.exists()) {
-          setWorkOrder(null);
-          return;
-        }
+    const loadedTechnicians: Technician[] = snap.docs.map((document) => ({
+      id: document.id,
+      ...(document.data() as Omit<Technician, "id">),
+    }));
 
-        const data = snap.data() as WorkOrder;
+    setTechnicians(loadedTechnicians);
+  }
 
-        setWorkOrder(data);
-        setScheduledDate(data.scheduledDate || "");
-        setTimeWindow(data.timeWindow || "");
-        setNotes(data.notes || "");
-        setAssignedTechnicianId(data.assignedTechnicianId || "");
-        setAssignedTechnicianName(data.assignedTechnicianName || "");
-        setProjectId(data.projectId || "");
-        setDeviceTypeId(data.deviceTypeId || "");
-      } catch (error) {
-        console.error("Error loading work order:", error);
-      } finally {
-        setLoading(false);
+  async function loadWorkOrder() {
+    if (!workOrderId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const ref = doc(db, "workOrders", workOrderId);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) {
+        setWorkOrder(null);
+        return;
       }
+
+      const data = snap.data() as WorkOrder;
+
+      setWorkOrder(data);
+      setScheduledDate(data.scheduledDate || "");
+      setTimeWindow(data.timeWindow || "");
+      setNotes(data.notes || "");
+      setAssignedTechnicianId(data.assignedTechnicianId || "");
+      setProjectId(data.projectId || "");
+      setDeviceTypeId(data.deviceTypeId || "");
+
+      await loadTechnicians(data.companyId);
+    } catch (error) {
+      console.error("Error loading work order:", error);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    async function loadTechnicians() {
-      const techniciansQuery = query(
-        collection(db, "users"),
-        where("role", "==", "Technician"),
-        where("isActive", "==", true)
-      );
+  loadWorkOrder();
+  loadAdminOptions();
+}, [workOrderId]);
 
-      const snap = await getDocs(techniciansQuery);
+useEffect(() => {
+  if (
+    !scheduledDate ||
+    !timeWindow ||
+    technicians.length === 0 ||
+    !workOrder
+  ) {
+    setTechnicianConflicts({});
+    return;
+  }
 
-      const loadedTechnicians: Technician[] = snap.docs.map((document) => ({
-        id: document.id,
-        ...(document.data() as Omit<Technician, "id">),
-      }));
-
-      setTechnicians(loadedTechnicians);
-    }
-
-    loadWorkOrder();
-    loadTechnicians();
-    loadAdminOptions();
-  }, [workOrderId]);
+  evaluateTechnicianAvailability(
+    scheduledDate,
+    timeWindow
+  );
+}, [
+  scheduledDate,
+  timeWindow,
+  technicians,
+  workOrder,
+  workOrderId,
+]);
 
   async function loadAdminOptions() {
   const projectsQuery = query(
@@ -223,6 +276,120 @@ export default function EditWorkOrderPage() {
   );
 }
 
+async function evaluateTechnicianAvailability(
+  selectedDate: string,
+  selectedWindow: string
+) {
+  if (!selectedDate || !selectedWindow) {
+    setTechnicianConflicts({});
+    return;
+  }
+
+  try {
+    const weekday = getWeekdayFromDate(selectedDate);
+    const schedulingWindowId =
+      getSchedulingWindowId(selectedWindow);
+
+    if (!weekday || !schedulingWindowId) {
+      setTechnicianConflicts({});
+      return;
+    }
+
+    if (!workOrder?.companyId) {
+      setTechnicianConflicts({});
+      return;
+    }
+
+    const availabilityQuery = query(
+      collection(db, "technicianAvailability"),
+      where("companyId", "==", workOrder.companyId)
+    );
+
+    const availabilitySnapshot = await getDocs(
+      availabilityQuery
+    );
+
+    const availabilityRecords: Record<
+      string,
+      TechnicianAvailability
+    > = {};
+
+    availabilitySnapshot.forEach((availabilityDocument) => {
+      const data =
+        availabilityDocument.data() as TechnicianAvailability;
+
+      availabilityRecords[data.technicianId] = data;
+    });
+
+    const conflicts: Record<string, string> = {};
+
+    eligibleTechnicians.forEach((technician) => {
+      const availability =
+        availabilityRecords[technician.id];
+
+      if (!availability) {
+        conflicts[technician.id] =
+          "Availability not configured";
+        return;
+      }
+
+      const scheduledWindows =
+        availability.weeklySchedule?.[weekday] ?? [];
+
+      if (!scheduledWindows.includes(schedulingWindowId)) {
+        conflicts[technician.id] =
+          `Not available ${weekday}`;
+      }
+    });
+
+    const workOrdersQuery = query(
+      collection(db, "workOrders"),
+      where("companyId", "==", workOrder.companyId),
+      where("scheduledDate", "==", selectedDate),
+      where("timeWindow", "==", selectedWindow)
+    );
+
+    const workOrdersSnapshot =
+      await getDocs(workOrdersQuery);
+
+    workOrdersSnapshot.forEach((workOrderDocument) => {
+      if (workOrderDocument.id === workOrderId) {
+        return;
+      }
+
+      const data = workOrderDocument.data();
+
+      const blockingStatuses = [
+        "Scheduled",
+        "Appointment Confirmed",
+        "Assigned",
+        "Completed",
+        "Verified",
+      ];
+
+      if (data.isActive === false) {
+        return;
+      }
+
+      if (!blockingStatuses.includes(data.status)) {
+        return;
+      }
+
+      if (data.assignedTechnicianId) {
+        conflicts[data.assignedTechnicianId] =
+          "Already assigned";
+      }
+    });
+
+    setTechnicianConflicts(conflicts);
+  } catch (error) {
+    console.error(
+      "Unable to evaluate technician availability:",
+      error
+    );
+  }
+}
+
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
   e.preventDefault();
 
@@ -243,9 +410,23 @@ export default function EditWorkOrderPage() {
   try {
     const ref = doc(db, "workOrders", workOrderId);
 
-    const selectedTechnician = technicians.find(
+    const selectedTechnician = eligibleTechnicians.find(
       (technician) => technician.id === assignedTechnicianId
     );
+
+    if (
+      assignedTechnicianId &&
+      technicianConflicts[assignedTechnicianId]
+    ) {
+      alert(
+        `This technician cannot be assigned: ${
+          technicianConflicts[assignedTechnicianId]
+        }.`
+      );
+
+      setSaving(false);
+      return;
+    }
 
     const selectedProject = projects.find((project) => project.id === projectId);
 
@@ -253,12 +434,16 @@ export default function EditWorkOrderPage() {
       (deviceType) => deviceType.id === deviceTypeId
     );
 
-    const technicianName =
-      selectedTechnician?.name ||
-      selectedTechnician?.email ||
-      "";
+    const technicianName = selectedTechnician
+      ? selectedTechnician.name ||
+        `${selectedTechnician.firstName || ""} ${
+          selectedTechnician.lastName || ""
+        }`.trim() ||
+        selectedTechnician.email ||
+        ""
+      : "";
 
-      if (!selectedProject) {
+if (!selectedProject) {
   alert("Project is required.");
   setSaving(false);
   return;
@@ -377,6 +562,8 @@ if (!selectedCompletionTemplate) {
     onChange={(e) => {
       setProjectId(e.target.value);
       setDeviceTypeId("");
+      setAssignedTechnicianId("");
+      setTechnicianConflicts({});
     }}
     className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
   >
@@ -464,7 +651,6 @@ if (!selectedCompletionTemplate) {
                 <option value="10:00 AM - 12:00 PM">10:00 AM - 12:00 PM</option>
                 <option value="12:00 PM - 2:00 PM">12:00 PM - 2:00 PM</option>
                 <option value="2:00 PM - 4:00 PM">2:00 PM - 4:00 PM</option>
-                <option value="4:00 PM - 6:00 PM">4:00 PM - 6:00 PM</option>
               </select>
             </div>
           </div>
@@ -495,27 +681,41 @@ if (!selectedCompletionTemplate) {
               <select
                 value={assignedTechnicianId}
                 onChange={(e) => {
-                  const selectedId = e.target.value;
-                  const selectedTechnician = technicians.find(
-                    (technician) => technician.id === selectedId
-                  );
-
-                  setAssignedTechnicianId(selectedId);
-                  setAssignedTechnicianName(
-                    selectedTechnician?.name || selectedTechnician?.email || ""
-                  );
+                  setAssignedTechnicianId(e.target.value);
                 }}
                 className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
               >
                 <option value="">Unassigned</option>
 
-                {technicians.map((technician) => (
-                  <option key={technician.id} value={technician.id}>
-                    {technician.employeeId
-                      ? `${technician.employeeId} - ${technician.name || technician.email}`
-                      : technician.name || technician.email || technician.id}
-                  </option>
-                ))}
+                {eligibleTechnicians.map((technician) => {
+                  const conflict =
+                    technicianConflicts[technician.id];
+
+                  const technicianName =
+                    technician.name ||
+                    `${technician.firstName || ""} ${
+                      technician.lastName || ""
+                    }`.trim() ||
+                    technician.email ||
+                    technician.id;
+
+                  const technicianLabel = technician.employeeId
+                    ? `${technician.employeeId} - ${technicianName}`
+                    : technicianName;
+
+                  return (
+                    <option
+                      key={technician.id}
+                      value={technician.id}
+                      disabled={Boolean(conflict)}
+                    >
+                      {technicianLabel}
+                      {conflict
+                        ? ` — ${conflict}`
+                        : " — Available"}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

@@ -31,6 +31,12 @@ type WorkOrder = {
   serviceTypeName?: string;
   scheduledDate?: string;
   timeWindow?: string;
+  companyId?: string;
+  projectId?: string;
+  projectName?: string;
+  assignedTechnicianId?: string;
+  assignedTechnicianName?: string;
+  status?: string;
 
   customerScheduleTokenUsed?: boolean;
   customerAcceptedTerms?: boolean;
@@ -91,6 +97,10 @@ export default function CustomerSchedulePage() {
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedWindow, setSelectedWindow] = useState("");
 
+  const [availableWindows, setAvailableWindows] = useState<string[]>([]);
+  const [isLoadingAvailability, setIsLoadingAvailability] =
+    useState(false);
+
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedWaiver, setAcceptedWaiver] = useState(false);
 
@@ -102,42 +112,122 @@ export default function CustomerSchedulePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function loadWorkOrder() {
-      try {
-        const workOrderQuery = query(
-          collection(db, "workOrders"),
-          where("customerScheduleToken", "==", token)
-        );
+  async function loadWorkOrder() {
+    try {
+      const workOrderQuery = query(
+        collection(db, "workOrders"),
+        where("customerScheduleToken", "==", token)
+      );
 
-        const snapshot = await getDocs(workOrderQuery);
+      const snapshot = await getDocs(workOrderQuery);
 
-        if (snapshot.empty) {
-          setError("This customer confirmation link is invalid.");
-          return;
-        }
-
-        const documentSnapshot = snapshot.docs[0];
-        const data = documentSnapshot.data();
-
-        setWorkOrder({
-          id: documentSnapshot.id,
-          ...data,
-        } as WorkOrder);
-
-        setSelectedDate(data.scheduledDate || "");
-        setSelectedWindow(data.timeWindow || "");
-      } catch (loadError) {
-        console.error("Unable to load customer confirmation:", loadError);
-        setError("Unable to load the customer confirmation page.");
-      } finally {
-        setIsLoading(false);
+      if (snapshot.empty) {
+        setError("This customer confirmation link is invalid.");
+        return;
       }
+
+      const documentSnapshot = snapshot.docs[0];
+      const data = documentSnapshot.data();
+
+      setWorkOrder({
+        id: documentSnapshot.id,
+        ...data,
+      } as WorkOrder);
+
+      setSelectedDate(data.scheduledDate || "");
+      setSelectedWindow(data.timeWindow || "");
+    } catch (loadError) {
+      console.error(
+        "Unable to load customer confirmation:",
+        loadError
+      );
+
+      setError(
+        "Unable to load the customer confirmation page."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  if (token) {
+    loadWorkOrder();
+  }
+}, [token]);
+
+useEffect(() => {
+  async function loadAvailability() {
+    if (
+      !token ||
+      !selectedDate ||
+      workOrder?.customerScheduleTokenUsed
+    ) {
+      setAvailableWindows([]);
+      return;
     }
 
-    if (token) {
-      loadWorkOrder();
+    try {
+      setIsLoadingAvailability(true);
+      setError("");
+
+      const response = await fetch(
+        `/api/customer-schedule/availability?token=${encodeURIComponent(
+          token
+        )}&date=${encodeURIComponent(selectedDate)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+            "Unable to load available time windows."
+        );
+      }
+
+      const loadedWindows = Array.isArray(
+        result.availableWindows
+      )
+        ? result.availableWindows
+        : [];
+
+      setAvailableWindows(loadedWindows);
+
+      if (
+        selectedWindow &&
+        !loadedWindows.includes(selectedWindow)
+      ) {
+        setSelectedWindow("");
+      }
+    } catch (availabilityError) {
+      console.error(
+        "Unable to load scheduling availability:",
+        availabilityError
+      );
+
+      setAvailableWindows([]);
+
+      setError(
+        availabilityError instanceof Error
+          ? availabilityError.message
+          : "Unable to load available time windows."
+      );
+    } finally {
+      setIsLoadingAvailability(false);
     }
-  }, [token]);
+  }
+
+  loadAvailability();
+}, [
+  token,
+  selectedDate,
+  selectedWindow,
+  workOrder?.customerScheduleTokenUsed,
+]);
 
   async function generateAndUploadReceipt(): Promise<ReceiptResult> {
     if (!workOrder) {
@@ -667,9 +757,11 @@ export default function CustomerSchedulePage() {
               <input
                 type="date"
                 value={selectedDate}
-                onChange={(event) =>
-                  setSelectedDate(event.target.value)
-                }
+                onChange={(event) => {
+                  setSelectedDate(event.target.value);
+                  setSelectedWindow("");
+                  setAvailableWindows([]);
+                }}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
               />
             </label>
@@ -684,11 +776,24 @@ export default function CustomerSchedulePage() {
                 onChange={(event) =>
                   setSelectedWindow(event.target.value)
                 }
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
+                disabled={
+                  !selectedDate ||
+                  isLoadingAvailability ||
+                  availableWindows.length === 0
+                }
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <option value="">Select a time window</option>
+                <option value="">
+                  {!selectedDate
+                    ? "Select a date first"
+                    : isLoadingAvailability
+                    ? "Checking availability..."
+                    : availableWindows.length === 0
+                    ? "No appointments available"
+                    : "Select a time window"}
+                </option>
 
-                {timeWindows.map((window) => (
+                {availableWindows.map((window) => (
                   <option key={window} value={window}>
                     {window}
                   </option>
@@ -705,7 +810,12 @@ export default function CustomerSchedulePage() {
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={
+              isSubmitting ||
+              isLoadingAvailability ||
+              !selectedDate ||
+              !selectedWindow
+            }
             className="w-full rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting

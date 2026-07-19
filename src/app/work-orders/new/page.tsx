@@ -14,6 +14,10 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import {
+  getSchedulingWindowId,
+  getWeekdayFromDate,
+} from "@/lib/scheduling";
 
 type Customer = {
   id: string;
@@ -68,9 +72,45 @@ type CompletionFormTemplate = {
   isActive?: boolean;
 };
 
+type Technician = {
+  id: string;
+  companyId?: string;
+  projectIds?: string[];
+  role?: string;
+  isActive?: boolean;
+};
+
+type TechnicianAvailability = {
+  technicianId: string;
+  companyId?: string;
+  weeklySchedule?: Record<string, string[]>;
+};
+
+type ExistingWorkOrder = {
+  projectId?: string;
+  assignedTechnicianId?: string;
+  status?: string;
+  isActive?: boolean;
+};
+
 function generateScheduleToken() {
   return crypto.randomUUID();
 }
+
+const BLOCKING_WORK_ORDER_STATUSES = [
+  "Scheduled",
+  "Appointment Confirmed",
+  "Assigned",
+  "Completed",
+  "Verified",
+];
+
+const TIME_WINDOWS = [
+  "8:00 AM - 10:00 AM",
+  "10:00 AM - 12:00 PM",
+  "12:00 PM - 2:00 PM",
+  "2:00 PM - 4:00 PM",
+] as const;
 
 function NewWorkOrderPageContent() {
   const router = useRouter();
@@ -96,10 +136,24 @@ function NewWorkOrderPageContent() {
 
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCheckingAvailability, setIsCheckingAvailability] =
+    useState(false);
+
+  const [hasAvailableTechnician, setHasAvailableTechnician] =
+    useState<boolean | null>(null);
+
+  const [availabilityMessage, setAvailabilityMessage] =
+    useState("");
+
+  const [timeWindowAvailability, setTimeWindowAvailability] =
+    useState<Record<string, boolean>>({});  
+
   const [error, setError] = useState("");
 
   const filteredDeviceTypes = deviceTypes.filter(
-    (deviceType) => deviceType.isActive !== false
+    (deviceType) =>
+      deviceType.isActive !== false &&
+      (!projectId || deviceType.projectId === projectId)
   );
 
   const selectedCompletionTemplate = completionTemplates.find(
@@ -214,6 +268,348 @@ function NewWorkOrderPageContent() {
   setCustomerId(selectedCustomer.id);
 }, [customerIdFromUrl, customers]);
 
+  async function checkTechnicianAvailability(
+    selectedProjectId: string,
+    selectedDate: string,
+    selectedTimeWindow: string,
+    updateUi = true
+  ): Promise<boolean> {
+    if (
+      !selectedProjectId ||
+      !selectedDate ||
+      !selectedTimeWindow
+    ) {
+      if (updateUi) {
+        setHasAvailableTechnician(null);
+        setAvailabilityMessage("");
+      }
+
+      return false;
+    }
+
+    const selectedProject = projects.find(
+      (project) => project.id === selectedProjectId
+    );
+
+    if (!selectedProject?.companyId) {
+      if (updateUi) {
+        setHasAvailableTechnician(false);
+        setAvailabilityMessage(
+          "The selected project is missing company information."
+        );
+      }
+
+      return false;
+    }
+
+    const weekday = getWeekdayFromDate(selectedDate);
+    const schedulingWindowId =
+      getSchedulingWindowId(selectedTimeWindow);
+
+    if (!weekday || !schedulingWindowId) {
+      if (updateUi) {
+        setHasAvailableTechnician(false);
+        setAvailabilityMessage(
+          "The selected date or time window is invalid."
+        );
+      }
+
+      return false;
+    }
+
+    try {
+      if (updateUi) {
+        setIsCheckingAvailability(true);
+        setAvailabilityMessage("");
+      }
+
+      /*
+      * Load technicians assigned to this company.
+      */
+
+      const techniciansQuery = query(
+        collection(db, "users"),
+        where("companyId", "==", selectedProject.companyId),
+        where("role", "==", "Technician"),
+        where("isActive", "==", true)
+      );
+
+      const techniciansSnapshot = await getDocs(
+        techniciansQuery
+      );
+
+      const eligibleTechnicians: Technician[] =
+        techniciansSnapshot.docs
+          .map((technicianDocument) => ({
+            id: technicianDocument.id,
+            ...(technicianDocument.data() as Omit<
+              Technician,
+              "id"
+            >),
+          }))
+          .filter(
+            (technician) =>
+              Array.isArray(technician.projectIds) &&
+              technician.projectIds.includes(selectedProjectId)
+          );
+
+      if (eligibleTechnicians.length === 0) {
+        if (updateUi) {
+          setHasAvailableTechnician(false);
+          setAvailabilityMessage(
+            "No active technicians are assigned to this program."
+          );
+        }
+        return false;
+      }
+
+      const eligibleTechnicianIds = new Set(
+        eligibleTechnicians.map(
+          (technician) => technician.id
+        )
+      );
+
+      /*
+      * Load recurring weekly schedules.
+      */
+
+      const availabilityQuery = query(
+        collection(db, "technicianAvailability"),
+        where("companyId", "==", selectedProject.companyId)
+      );
+
+      const availabilitySnapshot = await getDocs(
+        availabilityQuery
+      );
+
+      const scheduledTechnicianIds = new Set<string>();
+
+      availabilitySnapshot.docs.forEach(
+        (availabilityDocument) => {
+          const availability =
+            availabilityDocument.data() as TechnicianAvailability;
+
+          if (
+            !availability.technicianId ||
+            !eligibleTechnicianIds.has(
+              availability.technicianId
+            )
+          ) {
+            return;
+          }
+
+          const scheduledWindows =
+            availability.weeklySchedule?.[weekday] ?? [];
+
+          if (
+            scheduledWindows.includes(schedulingWindowId)
+          ) {
+            scheduledTechnicianIds.add(
+              availability.technicianId
+            );
+          }
+        }
+      );
+
+      if (scheduledTechnicianIds.size === 0) {
+        if (updateUi) {
+          setHasAvailableTechnician(false);
+          setAvailabilityMessage(
+            "No technicians assigned to this program are scheduled to work during this time window."
+          );
+        }
+        return false;
+      }
+
+      /*
+      * Find technicians already assigned to another work order
+      * during the selected slot.
+      */
+
+      const existingWorkOrdersQuery = query(
+        collection(db, "workOrders"),
+        where("companyId", "==", selectedProject.companyId),
+        where("scheduledDate", "==", selectedDate),
+        where("timeWindow", "==", selectedTimeWindow)
+      );
+
+      const existingWorkOrdersSnapshot = await getDocs(
+        existingWorkOrdersQuery
+      );
+
+      const bookedTechnicianIds = new Set<string>();
+let unassignedWorkOrderCount = 0;
+
+existingWorkOrdersSnapshot.docs.forEach(
+  (workOrderDocument) => {
+    const existingWorkOrder =
+      workOrderDocument.data() as ExistingWorkOrder;
+
+    if (existingWorkOrder.isActive === false) {
+      return;
+    }
+
+    if (
+      !existingWorkOrder.status ||
+      !BLOCKING_WORK_ORDER_STATUSES.includes(
+        existingWorkOrder.status
+      )
+    ) {
+      return;
+    }
+
+    /*
+     * Work orders from another program do not consume this
+     * program's unassigned capacity.
+     */
+    if (
+      existingWorkOrder.projectId !== selectedProjectId
+    ) {
+      return;
+    }
+
+    if (existingWorkOrder.assignedTechnicianId) {
+      /*
+       * Count the technician only when that technician is
+       * eligible and scheduled for this program/window.
+       */
+      if (
+        scheduledTechnicianIds.has(
+          existingWorkOrder.assignedTechnicianId
+        )
+      ) {
+        bookedTechnicianIds.add(
+          existingWorkOrder.assignedTechnicianId
+        );
+      }
+
+      return;
+    }
+
+    /*
+     * An unassigned scheduled work order still consumes one
+     * available technician slot.
+     */
+    unassignedWorkOrderCount += 1;
+  }
+);
+
+const availableScheduledTechnicianCount =
+  Array.from(scheduledTechnicianIds).filter(
+    (technicianId) =>
+      !bookedTechnicianIds.has(technicianId)
+  ).length;
+
+const remainingCapacity =
+  availableScheduledTechnicianCount -
+  unassignedWorkOrderCount;
+
+const availableTechnicianExists =
+  remainingCapacity > 0;
+
+      if (updateUi) {
+        setHasAvailableTechnician(
+          availableTechnicianExists
+        );
+
+        setAvailabilityMessage(
+          availableTechnicianExists
+            ? `${remainingCapacity} technician ${
+                remainingCapacity === 1 ? "slot is" : "slots are"
+              } available for this program and time window.`
+            : "No remaining technician capacity is available for this program and time window."
+        );
+      }
+
+      return availableTechnicianExists;
+    } catch (availabilityError) {
+      console.error(
+        "Unable to check technician availability:",
+        availabilityError
+      );
+
+      if (updateUi) {
+        setHasAvailableTechnician(false);
+        setAvailabilityMessage(
+          "Unable to verify technician availability."
+        );
+      }
+
+      return false;
+    } finally {
+      if (updateUi) {
+        setIsCheckingAvailability(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!projectId || !scheduledDate) {
+      setTimeWindowAvailability({});
+      return;
+    }
+
+    checkAllTimeWindowAvailability(
+      projectId,
+      scheduledDate
+    );
+  }, [projectId, scheduledDate]);
+
+  useEffect(() => {
+    if (!projectId || !scheduledDate || !timeWindow) {
+      setHasAvailableTechnician(null);
+      setAvailabilityMessage("");
+      return;
+    }
+
+    checkTechnicianAvailability(
+      projectId,
+      scheduledDate,
+      timeWindow
+    );
+  }, [projectId, scheduledDate, timeWindow]);
+
+  async function checkAllTimeWindowAvailability(
+  selectedProjectId: string,
+  selectedDate: string
+) {
+  if (!selectedProjectId || !selectedDate) {
+    setTimeWindowAvailability({});
+    return;
+  }
+
+  try {
+    setIsCheckingAvailability(true);
+
+    const results = await Promise.all(
+      TIME_WINDOWS.map(async (window) => {
+        const isAvailable =
+          await checkTechnicianAvailability(
+            selectedProjectId,
+            selectedDate,
+            window,
+            false
+          );
+
+        return [window, isAvailable] as const;
+      })
+    );
+
+    setTimeWindowAvailability(
+      Object.fromEntries(results)
+    );
+  } catch (availabilityError) {
+    console.error(
+      "Unable to check all time windows:",
+      availabilityError
+    );
+
+    setTimeWindowAvailability({});
+  } finally {
+    setIsCheckingAvailability(false);
+  }
+}
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -255,6 +651,21 @@ function NewWorkOrderPageContent() {
     if (!selectedCompletionTemplate) {
       setError(
         "No active completion template was found for this project, service type, and device type."
+      );
+      setIsSaving(false);
+      return;
+    }
+
+    const availabilityConfirmed =
+      await checkTechnicianAvailability(
+        selectedProject.id,
+        scheduledDate,
+        timeWindow
+      );
+
+    if (!availabilityConfirmed) {
+      setError(
+        "This work order cannot be created because no technician assigned to this program is available for the selected date and time window."
       );
       setIsSaving(false);
       return;
@@ -389,6 +800,10 @@ function NewWorkOrderPageContent() {
                 onChange={(e) => {
                   setProjectId(e.target.value);
                   setDeviceTypeId("");
+                  setTimeWindow("");
+                  setTimeWindowAvailability({});
+                  setHasAvailableTechnician(null);
+                  setAvailabilityMessage("");
                 }}
                 className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
                 required
@@ -484,7 +899,13 @@ function NewWorkOrderPageContent() {
               <input
                 type="date"
                 value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
+               onChange={(e) => {
+                setScheduledDate(e.target.value);
+                setTimeWindow("");
+                setTimeWindowAvailability({});
+                setHasAvailableTechnician(null);
+                setAvailabilityMessage("");
+              }}
                 className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
                 required
               />
@@ -496,17 +917,73 @@ function NewWorkOrderPageContent() {
               </label>
               <select
                 value={timeWindow}
-                onChange={(e) => setTimeWindow(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white"
+                onChange={(e) => {
+                  setTimeWindow(e.target.value);
+                  setHasAvailableTechnician(null);
+                  setAvailabilityMessage("");
+                }}
+                disabled={
+                  !projectId ||
+                  !scheduledDate ||
+                  isCheckingAvailability
+                }
+                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white disabled:cursor-not-allowed disabled:opacity-60"
                 required
               >
-                <option value="">Select time window</option>
-                <option value="8:00 AM - 10:00 AM">8:00 AM - 10:00 AM</option>
-                <option value="10:00 AM - 12:00 PM">10:00 AM - 12:00 PM</option>
-                <option value="12:00 PM - 2:00 PM">12:00 PM - 2:00 PM</option>
-                <option value="2:00 PM - 4:00 PM">2:00 PM - 4:00 PM</option>
-                <option value="4:00 PM - 6:00 PM">4:00 PM - 6:00 PM</option>
+                <option value="">
+                  {!projectId
+                    ? "Select project first"
+                    : !scheduledDate
+                    ? "Select date first"
+                    : isCheckingAvailability
+                    ? "Checking availability..."
+                    : "Select time window"}
+                </option>
+
+                {TIME_WINDOWS.map((window) => {
+                  const availability =
+                    timeWindowAvailability[window];
+
+                  const isUnavailable =
+                    availability === false;
+
+                  return (
+                    <option
+                      key={window}
+                      value={window}
+                      disabled={isUnavailable}
+                    >
+                      {window}
+                      {isUnavailable
+                        ? " — No availability"
+                        : availability === true
+                        ? " — Available"
+                        : ""}
+                    </option>
+                  );
+                })}
               </select>
+            </div>
+
+            <div className="md:col-span-2">
+              {!projectId || !scheduledDate || !timeWindow ? (
+                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm text-slate-500">
+                  Select a project, date, and time window to check technician
+                  availability.
+                </div>
+              ) : isCheckingAvailability ? (
+                <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-300">
+                  Checking technician availability...
+                </div>
+              ) : hasAvailableTechnician === true ? (
+                <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-300">
+                  {availabilityMessage}
+                </div>
+              ) : hasAvailableTechnician === false ? (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                  {availabilityMessage}
+                </div>
+              ) : null}
             </div>
 
             <div className="md:col-span-2">
@@ -538,7 +1015,12 @@ function NewWorkOrderPageContent() {
 
             <button
               type="submit"
-              disabled={isSaving || isLoadingOptions}
+              disabled={
+                isSaving ||
+                isLoadingOptions ||
+                isCheckingAvailability ||
+                hasAvailableTechnician !== true
+              }
               className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? "Saving..." : "Save Work Order"}

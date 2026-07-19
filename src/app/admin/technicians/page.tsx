@@ -19,10 +19,13 @@ import { db } from "@/lib/firebase";
 type Technician = {
   id: string;
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   phone?: string;
   employeeId?: string;
   companyId?: string;
+  projectIds?: string[];
   isActive?: boolean;
 };
 
@@ -70,6 +73,24 @@ export default function TechniciansPage() {
     setCompanyId(loadedCompanies[0].id);
   }
 }
+
+useEffect(() => {
+  if (!isSystemAdmin) {
+    setCompanyId(userCompanyId);
+    return;
+  }
+
+  async function initializeCompanies() {
+    try {
+      await loadCompanies();
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load companies.");
+    }
+  }
+
+  initializeCompanies();
+}, [isSystemAdmin, userCompanyId]);
 
 useEffect(() => {
   if (isLoadingProfile) return;
@@ -178,6 +199,7 @@ async function generateEmployeeId(selectedCompanyId: string) {
         role: "Technician",
         companyId,
         employeeId: generatedEmployeeId,
+        projectIds: [],
         isActive: true,
         createdAt: serverTimestamp(),
       });
@@ -249,6 +271,7 @@ async function generateEmployeeId(selectedCompanyId: string) {
                 />
               </div>
 
+                {isSystemAdmin && (
                 <div>
                   <label className="mb-2 block text-sm text-slate-300">
                     Company
@@ -267,19 +290,8 @@ async function generateEmployeeId(selectedCompanyId: string) {
                       </option>
                     ))}
                   </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">
-                  Company ID
-                </label>
-                <input
-                  value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none focus:border-blue-500"
-                  placeholder="horizenone-demo"
-                />
-              </div>
+                </div>
+              )}
 
               <div>
                 <label className="mb-2 block text-sm text-slate-300">
@@ -325,7 +337,9 @@ async function generateEmployeeId(selectedCompanyId: string) {
                     key={technician.id}
                     className="rounded-lg border border-slate-800 bg-slate-950 p-4"
                   >
-                    <p className="font-semibold">{technician.name}</p>
+                    <p className="font-semibold">{technician.name ||
+    `${technician.firstName || ""} ${technician.lastName || ""}`.trim() ||
+    "Unnamed Technician"}</p>
                     <p className="mt-1 text-sm text-slate-500"> Employee ID: {technician.employeeId || "Not set"} </p>
                     <p className="mt-1 text-sm text-slate-400">
                       {technician.email || "No email"}
@@ -336,6 +350,21 @@ async function generateEmployeeId(selectedCompanyId: string) {
                     <p className="mt-1 text-sm text-slate-500">
                       Company ID: {technician.companyId || "Not set"}
                     </p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link
+                        href={`/admin/technicians/${technician.id}/availability`}
+                        className="inline-flex items-center justify-center rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20 hover:text-cyan-200"
+                      >
+                        Manage Availability
+                      </Link>
+
+                      <Link
+                        href={`/admin/technicians/${technician.id}/programs`}
+                        className="inline-flex items-center justify-center rounded-lg border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 hover:text-blue-200"
+                      >
+                        Manage Programs
+                      </Link>
+                    </div>
                   </div>
                 ))
               ) : (
