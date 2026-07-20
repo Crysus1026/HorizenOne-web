@@ -585,14 +585,24 @@ useEffect(() => {
               </a>
 
               {workOrder.customerConfirmationReceiptUrl && (
-                <a
-                  href={workOrder.customerConfirmationReceiptUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-                >
-                  View Confirmation Receipt
-                </a>
+                <>
+                  <a
+                    href={workOrder.customerConfirmationReceiptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+                  >
+                    View Confirmation Receipt
+                  </a>
+
+                  <a
+                    href={workOrder.customerConfirmationReceiptUrl}
+                    download={`Confirmation-${workOrder.customerConfirmationNumber || workOrder.id}.pdf`}
+                    className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    Download Receipt
+                  </a>
+                </>
               )}
             </div>
           </section>
