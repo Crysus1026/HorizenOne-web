@@ -275,41 +275,68 @@ function handleRemoveCompletionDevice(deviceId: string) {
   );
 }
 
-async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-  if (!workOrderId || !workOrder) return;
+async function handlePhotoUpload(
+  e: React.ChangeEvent<HTMLInputElement>
+) {
+  if (!workOrderId || !workOrder || uploadingPhoto) return;
 
-  const file = e.target.files?.[0];
+  const files = Array.from(e.target.files || []);
 
-  if (!file) return;
+  if (files.length === 0) return;
 
   setUploadingPhoto(true);
 
   try {
-    const filePath = `workOrders/${workOrderId}/photos/${Date.now()}-${file.name}`;
-    const storageRef = ref(storage, filePath);
+    const downloadUrls: string[] = [];
 
-    await uploadBytes(storageRef, file);
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        throw new Error(`${file.name} is not a valid image file.`);
+      }
 
-    const downloadUrl = await getDownloadURL(storageRef);
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+
+      const filePath =
+        `workOrders/${workOrderId}/photos/` +
+        `${Date.now()}-${crypto.randomUUID()}-${safeFileName}`;
+
+      const storageRef = ref(storage, filePath);
+
+      await uploadBytes(storageRef, file);
+
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      downloadUrls.push(downloadUrl);
+    }
+
+    if (downloadUrls.length === 0) return;
 
     const workOrderRef = doc(db, "workOrders", workOrderId);
 
     await updateDoc(workOrderRef, {
-      photoUrls: arrayUnion(downloadUrl),
+      photoUrls: arrayUnion(...downloadUrls),
       updatedAt: serverTimestamp(),
     });
 
-    setWorkOrder((prev) =>
-      prev
+    setWorkOrder((previous) =>
+      previous
         ? {
-            ...prev,
-            photoUrls: [...(prev.photoUrls || []), downloadUrl],
+            ...previous,
+            photoUrls: [
+              ...(previous.photoUrls || []),
+              ...downloadUrls,
+            ],
           }
-        : prev
+        : previous
     );
   } catch (err) {
-    console.error("Error uploading photo:", err);
-    alert("Failed to upload photo.");
+    console.error("Error uploading photos:", err);
+
+    alert(
+      err instanceof Error
+        ? err.message
+        : "Failed to upload one or more photos."
+    );
   } finally {
     setUploadingPhoto(false);
     e.target.value = "";
@@ -823,10 +850,15 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     Upload job photos from the technician workflow.
   </p>
 
-  <label className="mt-4 block">
-    <span className="mb-2 block text-sm font-medium text-zinc-300">
-      Upload Work Order Photo
-    </span>
+  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+  <label
+    className={`flex flex-1 items-center justify-center rounded-md border border-cyan-500 bg-black px-4 py-3 text-center text-sm font-medium text-cyan-300 transition ${
+      uploadingPhoto
+        ? "cursor-not-allowed opacity-50"
+        : "cursor-pointer hover:bg-cyan-500/10"
+    }`}
+  >
+    Take Photo
 
     <input
       type="file"
@@ -834,9 +866,29 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
       capture="environment"
       onChange={handlePhotoUpload}
       disabled={uploadingPhoto}
-      className="block w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-sm text-zinc-300 file:mr-4 file:rounded-md file:border-0 file:bg-cyan-500 file:px-4 file:py-2 file:text-sm file:font-bold file:text-black hover:file:bg-cyan-400 disabled:opacity-50"
+      className="hidden"
     />
   </label>
+
+  <label
+    className={`flex flex-1 items-center justify-center rounded-md border border-zinc-700 bg-zinc-950 px-4 py-3 text-center text-sm font-medium text-zinc-300 transition ${
+      uploadingPhoto
+        ? "cursor-not-allowed opacity-50"
+        : "cursor-pointer hover:bg-zinc-900"
+    }`}
+  >
+    Choose From Gallery
+
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={handlePhotoUpload}
+      disabled={uploadingPhoto}
+      className="hidden"
+    />
+  </label>
+</div>
 
   {uploadingPhoto && (
     <p className="mt-3 text-sm text-cyan-400">Uploading photo...</p>
