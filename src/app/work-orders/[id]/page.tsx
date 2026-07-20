@@ -210,40 +210,24 @@ function handleOpenCustomerLink() {
   window.open(link, "_blank");
 }
 
-async function handleDownloadReceipt() {
+function handleDownloadReceipt() {
   if (!workOrder?.customerConfirmationReceiptUrl) {
+    alert("No confirmation receipt is available.");
     return;
   }
 
-  try {
-    const response = await fetch(
+  const fileName = `Confirmation-${
+    workOrder.customerConfirmationNumber ||
+    workOrder.workOrderNumber ||
+    workOrderId
+  }.pdf`;
+
+  const downloadUrl =
+    `/api/customer-confirmation-receipt?url=${encodeURIComponent(
       workOrder.customerConfirmationReceiptUrl
-    );
+    )}&fileName=${encodeURIComponent(fileName)}`;
 
-    const blob = await response.blob();
-
-    const url = window.URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-
-    link.href = url;
-
-    link.download =
-      `Confirmation-${
-        workOrder.customerConfirmationNumber || workOrderId
-      }.pdf`;
-
-    document.body.appendChild(link);
-
-    link.click();
-
-    document.body.removeChild(link);
-
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error("Unable to download receipt:", error);
-    alert("Unable to download receipt.");
-  }
+  window.location.href = downloadUrl;
 }
 
 async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
