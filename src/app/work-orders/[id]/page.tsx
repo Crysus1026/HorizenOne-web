@@ -50,6 +50,8 @@ type WorkOrder = {
   completionData?: Record<string, any>;
   completionDevices?: any[];
   completionPhotoUrls?: string[];
+  customerConfirmationNumber?: string;
+  customerConfirmationReceiptUrl?: string;
   customerScheduleToken?: string;
   customerScheduleTokenUsed?: boolean;
   customerAcceptedTerms?: boolean;
@@ -206,6 +208,42 @@ function handleOpenCustomerLink() {
   const link = `${window.location.origin}/customer-schedule/${workOrder.customerScheduleToken}`;
 
   window.open(link, "_blank");
+}
+
+async function handleDownloadReceipt() {
+  if (!workOrder?.customerConfirmationReceiptUrl) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      workOrder.customerConfirmationReceiptUrl
+    );
+
+    const blob = await response.blob();
+
+    const url = window.URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+      `Confirmation-${
+        workOrder.customerConfirmationNumber || workOrderId
+      }.pdf`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    document.body.removeChild(link);
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Unable to download receipt:", error);
+    alert("Unable to download receipt.");
+  }
 }
 
 async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -605,32 +643,62 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
             )}
 
             {workOrder.customerScheduleTokenUsed && (
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <DetailItem
-                  label="Installation Date"
-                  value={workOrder.scheduledDate || "Not selected"}
-                />
+              <>
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <DetailItem
+                    label="Installation Date"
+                    value={workOrder.scheduledDate || "Not selected"}
+                  />
 
-                <DetailItem
-                  label="Time Window"
-                  value={workOrder.timeWindow || "Not selected"}
-                />
+                  <DetailItem
+                    label="Time Window"
+                    value={workOrder.timeWindow || "Not selected"}
+                  />
 
-                <DetailItem
-                  label="Terms Accepted"
-                  value={workOrder.customerAcceptedTerms ? "Yes" : "No"}
-                />
+                  <DetailItem
+                    label="Terms Accepted"
+                    value={workOrder.customerAcceptedTerms ? "Yes" : "No"}
+                  />
 
-                <DetailItem
-                  label="Waiver Accepted"
-                  value={workOrder.customerAcceptedWaiver ? "Yes" : "No"}
-                />
+                  <DetailItem
+                    label="Waiver Accepted"
+                    value={workOrder.customerAcceptedWaiver ? "Yes" : "No"}
+                  />
 
-                <DetailItem
-                  label="Electronic Signature"
-                  value={workOrder.customerSignatureName || "Not provided"}
-                />
-              </div>
+                  <DetailItem
+                    label="Electronic Signature"
+                    value={workOrder.customerSignatureName || "Not provided"}
+                  />
+
+                  <DetailItem
+                    label="Confirmation Number"
+                    value={
+                      workOrder.customerConfirmationNumber || "Not available"
+                    }
+                  />
+                </div>
+
+                {workOrder.customerConfirmationReceiptUrl && (
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <a
+                      href={workOrder.customerConfirmationReceiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+                    >
+                      View Confirmation Receipt
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={handleDownloadReceipt}
+                      className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                    >
+                      Download Receipt
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
