@@ -6,8 +6,15 @@ import { useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function NewCustomerPage() {
+  const {
+    companyId,
+    isSystemAdmin,
+    isLoadingProfile,
+    profileError,
+  } = useUserProfile();
   const [customerName, setCustomerName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [address, setAddress] = useState("");
@@ -27,9 +34,27 @@ export default function NewCustomerPage() {
   setIsSaving(true);
   setError("");
 
+  if (isLoadingProfile) {
+  setError("Your user profile is still loading.");
+  setIsSaving(false);
+  return;
+}
+
+if (profileError) {
+  setError(profileError);
+  setIsSaving(false);
+  return;
+}
+
+if (!isSystemAdmin && !companyId) {
+  setError("Your user account is missing a company assignment.");
+  setIsSaving(false);
+  return;
+}
+
   try {
     await addDoc(collection(db, "customers"), {
-      companyId: "horizenone-demo",
+      companyId,
       customerName,
       accountNumber: accountNumber.trim(),
       address,
@@ -204,10 +229,14 @@ export default function NewCustomerPage() {
 
             <button
                type="submit"
-               disabled={isSaving}
+               disabled={isSaving || isLoadingProfile}
                className="rounded-lg bg-blue-500 px-4 py-2 font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
              >
-               {isSaving ? "Saving..." : "Save Customer"}
+               {isLoadingProfile
+                  ? "Loading..."
+                  : isSaving
+                    ? "Saving..."
+                    : "Save Customer"}
             </button>
           </div>
         </form>

@@ -5,7 +5,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { getCompanyCollection } from "@/lib/companyQueries";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, where, query } from "firebase/firestore";
+import { orderBy, where } from "firebase/firestore";
 
 type Customer = {
   id: string;

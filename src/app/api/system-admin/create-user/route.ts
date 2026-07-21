@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       companyName,
       role,
       isSystemAdmin,
+      projectIds,
     } = body;
 
     if (!email || !password || !firstName || !lastName || !companyId || !role) {
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
       role,
       isActive: true,
       isSystemAdmin: Boolean(isSystemAdmin),
+      projectIds: Array.isArray(projectIds) ? projectIds : [],
       createdAt: new Date(),
       updatedAt: new Date(),
     });
