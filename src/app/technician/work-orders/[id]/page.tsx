@@ -468,8 +468,6 @@ function isTurndownCompletion() {
         updatedAt: serverTimestamp(),
       });
 
-const isTurndown = isTurndownCompletion();
-
 if (!isTurndown && selectedInventoryUnitId) {
   const selectedUnit = assignedInventoryUnits.find(
     (unit) => unit.id === selectedInventoryUnitId
