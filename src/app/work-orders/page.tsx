@@ -1,11 +1,17 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { orderBy, where } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  orderBy,
+  query,
+  where,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useUserProfile } from "@/hooks/useUserProfile";
-import { getCompanyCollection } from "@/lib/companyQueries";
 
 type WorkOrder = {
   id: string;
@@ -16,10 +22,14 @@ type WorkOrder = {
   timeWindow: string;
   assignedTechnicianName?: string;
   notes: string;
+  projectId?: string;
+  projectName?: string;
+  isActive?: boolean;
 };
 
 export default function WorkOrdersPage() {
   const {
+  profile,
   companyId,
   isSystemAdmin,
   isLoadingProfile,
@@ -50,27 +60,76 @@ useEffect(() => {
     setError("");
 
     try {
-      const workOrdersData = await getCompanyCollection<WorkOrder>(
-        "workOrders",
-        companyId,
-        isSystemAdmin,
-        [
-          where("isActive", "==", true),
-          orderBy("scheduledDate", "desc"),
-        ]
-      );
+      if (!profile) {
+        setError("Unable to load user profile.");
+        return;
+      }
 
-      setWorkOrders(workOrdersData);
-    } catch (err) {
-      console.error(err);
-      setError("Unable to load work orders.");
+      const workOrdersRef = collection(db, "workOrders");
+
+      const isCompanyAdmin = profile.role === "Admin";
+
+      let workOrdersQuery;
+
+      if (isSystemAdmin) {
+        workOrdersQuery = query(
+          workOrdersRef,
+          where("isActive", "==", true),
+          orderBy("scheduledDate", "desc")
+        );
+      } else if (isCompanyAdmin) {
+        workOrdersQuery = query(
+          workOrdersRef,
+          where("companyId", "==", companyId),
+          where("isActive", "==", true),
+          orderBy("scheduledDate", "desc")
+        );
+      } else {
+        const assignedProjectIds = profile.projectIds || [];
+
+        if (assignedProjectIds.length === 0) {
+          setWorkOrders([]);
+          return;
+        }
+
+        workOrdersQuery = query(
+          workOrdersRef,
+          where("companyId", "==", companyId),
+          where("projectId", "in", assignedProjectIds),
+          where("isActive", "==", true),
+          orderBy("scheduledDate", "desc")
+        );
+      }
+
+      const snapshot = await getDocs(workOrdersQuery);
+
+      const loadedWorkOrders: WorkOrder[] = snapshot.docs.map((document) => ({
+        id: document.id,
+        ...(document.data() as Omit<WorkOrder, "id">),
+      }));
+
+      setWorkOrders(loadedWorkOrders);
+    } catch (err: unknown) {
+      console.error("Unable to load work orders:", err);
+
+      setError(
+        err instanceof Error
+          ? `Unable to load work orders: ${err.message}`
+          : "Unable to load work orders."
+      );
     } finally {
       setIsLoading(false);
     }
   }
 
   loadWorkOrders();
-}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
+}, [
+  profile,
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+]);
 
   const filteredWorkOrders = workOrders.filter((workOrder) => {
     const search = searchTerm.toLowerCase();
