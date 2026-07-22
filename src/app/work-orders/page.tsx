@@ -57,6 +57,8 @@ export default function WorkOrdersPage() {
       return;
     }
 
+    const currentProfile = profile;
+
     if (!isSystemAdmin && !companyId) {
       setError("User is missing companyId.");
       setIsLoading(false);
@@ -69,7 +71,7 @@ export default function WorkOrdersPage() {
 
       try {
         const workOrdersRef = collection(db, "workOrders");
-        const isCompanyAdmin = profile.role === "Admin";
+        const isCompanyAdmin = currentProfile.role === "Admin";
 
         let workOrdersQuery;
 
@@ -90,7 +92,7 @@ export default function WorkOrdersPage() {
           );
         } else {
           // Managers and Dispatchers: assigned programs only.
-          const assignedProjectIds = profile.projectIds ?? [];
+          const assignedProjectIds = currentProfile.projectIds ?? [];
 
           if (assignedProjectIds.length === 0) {
             setWorkOrders([]);
