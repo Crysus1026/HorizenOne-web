@@ -343,6 +343,26 @@ async function handlePhotoUpload(
   }
 }
 
+function isTurndownCompletion() {
+  if (!completionTemplate) return false;
+
+  const completionTypeField = completionTemplate.fields.find(
+    (field) =>
+      field.label.trim().toLowerCase() === "completion type"
+  );
+
+  if (!completionTypeField) return false;
+
+  const completionTypeValue =
+    completionData[completionTypeField.fieldKey];
+
+  return (
+    String(completionTypeValue || "")
+      .trim()
+      .toLowerCase() === "turndown"
+  );
+}
+
   function validateCompletionForm() {
     if (!completionTemplate) {
       setCompletionError(
@@ -351,10 +371,22 @@ async function handlePhotoUpload(
       return false;
     }
 
+    const isTurndown = isTurndownCompletion();
+
     for (const field of completionTemplate.fields) {
       if (!field.required) continue;
 
       const value = completionData[field.fieldKey];
+
+      const isSerialNumberField =
+        field.label.toLowerCase().includes("serial");
+
+      /*
+      * A turndown does not require an installed-device serial number.
+      */
+      if (isTurndown && isSerialNumberField) {
+        continue;
+      }
 
       if (
         value === undefined ||
@@ -367,25 +399,39 @@ async function handlePhotoUpload(
       }
     }
 
-    for (const device of completionDevices) {
-      if (!device.thermostatType?.trim()) {
-        setCompletionError("Each added device needs a thermostat type.");
-        return false;
-      }
+    /*
+    * Additional installed-device details are not required for
+    * a turndown because no device was installed.
+    */
+    if (!isTurndown) {
+      for (const device of completionDevices) {
+        if (!device.thermostatType?.trim()) {
+          setCompletionError(
+            "Each added device needs a thermostat type."
+          );
+          return false;
+        }
 
-      if (!device.inventoryUnitId?.trim()) {
-        setCompletionError("Each added device needs a selected inventory serial number.");
-        return false;
-      }
+        if (!device.inventoryUnitId?.trim()) {
+          setCompletionError(
+            "Each added device needs a selected inventory serial number."
+          );
+          return false;
+        }
 
-      if (!device.location?.trim()) {
-        setCompletionError("Each added device needs an install location.");
-        return false;
-      }
+        if (!device.location?.trim()) {
+          setCompletionError(
+            "Each added device needs an install location."
+          );
+          return false;
+        }
 
-      if (!device.systemType?.trim()) {
-        setCompletionError("Each added device needs a system type.");
-        return false;
+        if (!device.systemType?.trim()) {
+          setCompletionError(
+            "Each added device needs a system type."
+          );
+          return false;
+        }
       }
     }
 
@@ -404,11 +450,16 @@ async function handlePhotoUpload(
       setCompletionError("");
 
       const workOrderRef = doc(db, "workOrders", workOrder.id);
+      const isTurndown = isTurndownCompletion();
+
+      const savedCompletionDevices = isTurndown
+        ? []
+        : completionDevices;
 
       await updateDoc(workOrderRef, {
         status: "Completed",
         completionData,
-        completionDevices,
+        completionDevices: savedCompletionDevices,
         completionNotes,
         completionTemplateId: completionTemplate?.id || "",
         completedAt: serverTimestamp(),
@@ -417,7 +468,9 @@ async function handlePhotoUpload(
         updatedAt: serverTimestamp(),
       });
 
-      if (selectedInventoryUnitId) {
+const isTurndown = isTurndownCompletion();
+
+if (!isTurndown && selectedInventoryUnitId) {
   const selectedUnit = assignedInventoryUnits.find(
     (unit) => unit.id === selectedInventoryUnitId
   );
