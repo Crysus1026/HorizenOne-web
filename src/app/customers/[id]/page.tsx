@@ -69,22 +69,7 @@ export default function CustomerDetailPage() {
 
         setCustomer(customerSnap.data() as Customer);
 
-        const workOrdersQuery = query(
-          collection(db, "workOrders"),
-          where("customerId", "==", customerId),
-          orderBy("scheduledDate", "desc")
-        );
-
-        const workOrdersSnap = await getDocs(workOrdersQuery);
-
-        const loadedWorkOrders: WorkOrder[] = workOrdersSnap.docs.map(
-          (document) => ({
-            id: document.id,
-            ...(document.data() as Omit<WorkOrder, "id">),
-          })
-        );
-
-        setWorkOrders(loadedWorkOrders);
+        setWorkOrders([]);
       } catch (err) {
         console.error(err);
         setError("Unable to load customer detail.");
