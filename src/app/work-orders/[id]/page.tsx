@@ -88,6 +88,7 @@ export default function WorkOrderDetailPage() {
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [completionNotes, setCompletionNotes] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [installedInventoryUnits, setInstalledInventoryUnits] = useState<
@@ -116,6 +117,7 @@ const displayWorkOrderNumber =
 
         const installedInventoryQuery = query(
           collection(db, "inventoryUnits"),
+          where("companyId", "==", data.companyId),
           where("workOrderId", "==", workOrderId)
         );
 
@@ -131,8 +133,14 @@ const displayWorkOrderNumber =
         );
 
 setInstalledInventoryUnits(installedInventoryData);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Error loading work order:", error);
+
+        setError(
+          error instanceof Error
+            ? `Unable to load work order: ${error.message}`
+            : "Unable to load work order."
+        );
       } finally {
         setLoading(false);
       }
@@ -145,6 +153,9 @@ setInstalledInventoryUnits(installedInventoryData);
   if (!workOrderId) return;
 
   setSaving(true);
+  setLoading(true);
+  setError("");  
+  
 
   try {
     const ref = doc(db, "workOrders", workOrderId);
@@ -303,6 +314,23 @@ async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     return (
       <div className="p-6 text-white">
         Loading work order...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-white">
+        <div className="rounded-lg border border-red-800 bg-red-950 p-4 text-red-300">
+          {error}
+        </div>
+
+        <Link
+          href="/work-orders"
+          className="mt-4 inline-block text-blue-400 hover:text-blue-300"
+        >
+          Back to Work Orders
+        </Link>
       </div>
     );
   }

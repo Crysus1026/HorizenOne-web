@@ -117,13 +117,32 @@ export default function InventoryItemDetailPage() {
 
       const unitsQuery = query(
         collection(db, "inventoryUnits"),
+        where("companyId", "==", itemData.companyId),
         where("inventoryItemId", "==", inventoryItemId)
       );
 
-      const [techniciansSnapshot, unitsSnapshot] = await Promise.all([
-        getDocs(techniciansQuery),
-        getDocs(unitsQuery),
-      ]);
+      console.log("Loading inventory detail:", {
+        inventoryItemId,
+        itemCompanyId: itemData.companyId,
+      });
+
+      let techniciansSnapshot;
+
+      try {
+        techniciansSnapshot = await getDocs(techniciansQuery);
+      } catch (error) {
+        console.error("Technicians query failed:", error);
+        throw error;
+      }
+
+      let unitsSnapshot;
+
+      try {
+        unitsSnapshot = await getDocs(unitsQuery);
+      } catch (error) {
+        console.error("Inventory units query failed:", error);
+        throw error;
+      }
 
       const techniciansData = techniciansSnapshot.docs.map((document) => ({
         id: document.id,
@@ -137,9 +156,15 @@ export default function InventoryItemDetailPage() {
 
       setTechnicians(techniciansData);
       setUnits(unitsData);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error loading inventory item:", error);
-      alert("Unable to load inventory item.");
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown inventory loading error.";
+
+      alert(`Unable to load inventory item: ${message}`);
     } finally {
       setIsLoading(false);
     }
@@ -392,85 +417,6 @@ export default function InventoryItemDetailPage() {
         });
       }
 
-      async function handleUpdateUnitStatus(
-        unit: InventoryUnit,
-        newStatus: "damaged" | "lost" | "returned"
-      ) {
-        if (!item) return;
-
-        const confirmed = window.confirm(
-          newStatus === "returned"
-            ? `Mark ${unit.serialNumber} as RTU / returned?`
-            : `Mark ${unit.serialNumber} as ${newStatus}?`
-        );
-
-        if (!confirmed) return;
-
-        setIsUpdatingStatus(true);
-        setStatusActionUnitId(unit.id);
-
-        try {
-          const updateData =
-            newStatus === "returned"
-              ? {
-                  status: "returned",
-                  locationName: item.defaultLocationName || "Main Warehouse",
-                  assignedTechnicianId: "",
-                  assignedTechnicianName: "",
-                  updatedAt: serverTimestamp(),
-                }
-              : {
-                  status: newStatus,
-                  updatedAt: serverTimestamp(),
-                };
-
-          await updateDoc(doc(db, "inventoryUnits", unit.id), updateData);
-
-          await addDoc(collection(db, "inventoryTransactions"), {
-            companyId: item.companyId,
-            companyName: item.companyName || "",
-
-            projectId: item.projectId || "",
-            projectName: item.projectName || "",
-
-            inventoryItemId,
-            inventoryUnitId: unit.id,
-
-            itemName: item.itemName,
-            serialNumber: unit.serialNumber,
-
-            type: newStatus,
-
-            fromLocationName: unit.locationName || "",
-            fromTechnicianId: unit.assignedTechnicianId || "",
-            fromTechnicianName: unit.assignedTechnicianName || "",
-
-            toLocationName:
-              newStatus === "returned"
-                ? item.defaultLocationName || "Main Warehouse"
-                : "",
-
-            notes:
-              statusActionNotes.trim() ||
-              (newStatus === "returned"
-                ? "Marked RTU / returned from item detail page"
-                : `Marked ${newStatus} from item detail page`),
-
-            createdAt: serverTimestamp(),
-          });
-
-          setStatusActionNotes("");
-
-          await loadData();
-        } catch (error) {
-          console.error("Error updating unit status:", error);
-          alert("Unable to update unit status.");
-        } finally {
-          setStatusActionUnitId("");
-          setIsUpdatingStatus(false);
-        }
-      }
-
       setSelectedTechnicianId("");
       setSelectedUnitIds([]);
 
@@ -487,14 +433,16 @@ export default function InventoryItemDetailPage() {
 
   async function handleUpdateUnitStatus(
   unit: InventoryUnit,
-  newStatus: "damaged" | "lost" | "returned"
+  newStatus: "installed" | "damaged" | "lost" | "returned"
 ) {
   if (!item) return;
 
   const confirmMessage =
     newStatus === "returned"
       ? `Mark ${unit.serialNumber} as RTU / returned?`
-      : `Mark ${unit.serialNumber} as ${newStatus}?`;
+      : newStatus === "installed"
+        ? `Mark ${unit.serialNumber} as installed and remove it from the technician's inventory?`
+        : `Mark ${unit.serialNumber} as ${newStatus}?`;
 
   const confirmed = window.confirm(confirmMessage);
 
@@ -513,10 +461,18 @@ export default function InventoryItemDetailPage() {
             assignedTechnicianName: "",
             updatedAt: serverTimestamp(),
           }
-        : {
-            status: newStatus,
-            updatedAt: serverTimestamp(),
-          };
+        : newStatus === "installed"
+          ? {
+              status: "installed",
+              locationName: "",
+              assignedTechnicianId: "",
+              assignedTechnicianName: "",
+              updatedAt: serverTimestamp(),
+            }
+          : {
+              status: newStatus,
+              updatedAt: serverTimestamp(),
+            };
 
     await updateDoc(doc(db, "inventoryUnits", unit.id), updateData);
 
@@ -544,14 +500,16 @@ export default function InventoryItemDetailPage() {
           ? item.defaultLocationName || "Main Warehouse"
           : "",
 
-      notes:
-        statusActionNotes.trim() ||
-        (newStatus === "returned"
-          ? "Marked RTU / returned from item detail page"
-          : `Marked ${newStatus} from item detail page`),
+        notes:
+          statusActionNotes.trim() ||
+          (newStatus === "returned"
+            ? "Marked RTU / returned from item detail page"
+            : newStatus === "installed"
+              ? "Marked installed and removed from technician inventory"
+              : `Marked ${newStatus} from item detail page`),
 
-      createdAt: serverTimestamp(),
-    });
+              createdAt: serverTimestamp(),
+            });
 
     setStatusActionNotes("");
 
@@ -996,6 +954,23 @@ X2S-1003`}
 
               <td className="py-3 pr-4">
                 <div className="flex flex-wrap gap-2">
+
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateUnitStatus(unit, "installed")}
+                    disabled={
+                      isUpdatingStatus ||
+                      unit.status === "installed" ||
+                      unit.status === "available" ||
+                      unit.status === "returned"
+                    }
+                    className="rounded-md border border-cyan-500/40 px-2 py-1 text-xs text-cyan-300 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isUpdatingStatus && statusActionUnitId === unit.id
+                      ? "Updating..."
+                      : "Installed"}
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => handleUpdateUnitStatus(unit, "damaged")}

@@ -94,6 +94,7 @@ export default function InventoryUnitHistoryPage() {
 
       const transactionsQuery = query(
         collection(db, "inventoryTransactions"),
+        where("companyId", "==", unitData.companyId || ""),
         where("inventoryUnitId", "==", unitId),
         orderBy("createdAt", "desc")
       );
@@ -106,10 +107,19 @@ export default function InventoryUnitHistoryPage() {
       }));
 
       setTransactions(transactionsData);
-    } catch (error) {
-      console.error("Error loading inventory unit history:", error);
-      alert("Unable to load inventory unit history.");
-    } finally {
+    } catch (error: any) {
+      console.error("Error loading inventory unit history:", {
+        code: error?.code,
+        message: error?.message,
+        error,
+      });
+
+  alert(
+    error?.message
+      ? `Unable to load inventory unit history: ${error.message}`
+      : "Unable to load inventory unit history."
+  );
+} finally {
       setIsLoading(false);
     }
   }
