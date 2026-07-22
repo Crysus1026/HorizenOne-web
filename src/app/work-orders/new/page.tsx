@@ -18,6 +18,7 @@ import {
   getSchedulingWindowId,
   getWeekdayFromDate,
 } from "@/lib/scheduling";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 type Customer = {
   id: string;
@@ -115,6 +116,14 @@ const TIME_WINDOWS = [
 function NewWorkOrderPageContent() {
   const router = useRouter();
 
+  const {
+    profile,
+    companyId,
+    isSystemAdmin,
+    isLoadingProfile,
+    profileError,
+  } = useUserProfile();
+
   const searchParams = useSearchParams();
   const customerIdFromUrl = searchParams.get("customerId");
 
@@ -165,19 +174,58 @@ function NewWorkOrderPageContent() {
   );
 
   useEffect(() => {
+    if (isLoadingProfile) return;
+
+    if (profileError) {
+      setError(profileError);
+      setIsLoadingOptions(false);
+      return;
+    }
+
+    if (!profile) {
+      setError("Unable to load user profile.");
+      setIsLoadingOptions(false);
+      return;
+    }
+
+    if (!isSystemAdmin && !companyId) {
+      setError("Your user account is missing a company assignment.");
+      setIsLoadingOptions(false);
+      return;
+    }
+
+    const currentProfile = profile;
+
     async function loadOptions() {
       try {
-        const customersQuery = query(
-          collection(db, "customers"),
-          where("isActive", "==", true),
-          orderBy("customerName", "asc")
-        );
+        setIsLoadingOptions(true);
+        setError("");
 
-        const serviceTypesQuery = query(
-          collection(db, "serviceTypes"),
-          where("isActive", "==", true),
-          orderBy("name", "asc")
-        );
+        const customersQuery = isSystemAdmin
+          ? query(
+              collection(db, "customers"),
+              where("isActive", "==", true),
+              orderBy("customerName", "asc")
+            )
+          : query(
+              collection(db, "customers"),
+              where("companyId", "==", companyId),
+              where("isActive", "==", true),
+              orderBy("customerName", "asc")
+            );
+
+        const serviceTypesQuery = isSystemAdmin
+          ? query(
+              collection(db, "serviceTypes"),
+              where("isActive", "==", true),
+              orderBy("name", "asc")
+            )
+          : query(
+              collection(db, "serviceTypes"),
+              where("companyId", "==", companyId),
+              where("isActive", "==", true),
+              orderBy("name", "asc")
+            );
 
         const projectsQuery = query(
           collection(db, "projects"),
@@ -211,50 +259,89 @@ function NewWorkOrderPageContent() {
           getDocs(templatesQuery),
         ]);
 
+        const loadedProjects = projectsSnapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        })) as Project[];
+
+        const allowedProjects =
+          isSystemAdmin || currentProfile.role === "Admin"
+            ? loadedProjects.filter(
+                (project) =>
+                  isSystemAdmin || project.companyId === companyId
+              )
+            : loadedProjects.filter(
+                (project) =>
+                  project.companyId === companyId &&
+                  currentProfile.projectIds.includes(project.id)
+              );
+
+        const allowedProjectIds = new Set(
+          allowedProjects.map((project) => project.id)
+        );
+
         setCustomers(
-          customersSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
+          customersSnapshot.docs.map((document) => ({
+            id: document.id,
+            ...document.data(),
           })) as Customer[]
         );
 
         setServiceTypes(
-          serviceTypesSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
+          serviceTypesSnapshot.docs.map((document) => ({
+            id: document.id,
+            ...document.data(),
           })) as ServiceType[]
         );
 
-        setProjects(
-          projectsSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Project[]
-        );
+        setProjects(allowedProjects);
 
         setDeviceTypes(
-          deviceTypesSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as DeviceType[]
+          deviceTypesSnapshot.docs
+            .map((document) => ({
+              id: document.id,
+              ...document.data(),
+            }))
+            .filter((deviceType) =>
+              allowedProjectIds.has(
+                (deviceType as DeviceType).projectId || ""
+              )
+            ) as DeviceType[]
         );
 
         setCompletionTemplates(
-          templatesSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as CompletionFormTemplate[]
+          templatesSnapshot.docs
+            .map((document) => ({
+              id: document.id,
+              ...document.data(),
+            }))
+            .filter((template) =>
+              allowedProjectIds.has(
+                (template as CompletionFormTemplate).projectId || ""
+              )
+            ) as CompletionFormTemplate[]
         );
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load form options.");
+      } catch (err: unknown) {
+        console.error("Unable to load work-order options:", err);
+
+        setError(
+          err instanceof Error
+            ? `Unable to load form options: ${err.message}`
+            : "Unable to load form options."
+        );
       } finally {
         setIsLoadingOptions(false);
       }
     }
 
-    loadOptions();
-  }, []);
+    void loadOptions();
+  }, [
+    profile,
+    companyId,
+    isSystemAdmin,
+    isLoadingProfile,
+    profileError,
+  ]);
 
   useEffect(() => {
   if (!customerIdFromUrl || customers.length === 0) return;
@@ -642,6 +729,23 @@ const availableTechnicianExists =
       return;
     }
 
+    if (!selectedProject.companyId) {
+      setError("The selected project is missing a company assignment.");
+      setIsSaving(false);
+      return;
+    }
+
+    const canUseSelectedProject =
+      isSystemAdmin ||
+      profile?.role === "Admin" ||
+      profile?.projectIds.includes(selectedProject.id);
+
+    if (!canUseSelectedProject) {
+      setError("You do not have access to the selected project.");
+      setIsSaving(false);
+      return;
+    }
+
     if (!selectedDeviceType) {
       setError("Please select a device type.");
       setIsSaving(false);
@@ -682,7 +786,7 @@ const availableTechnicianExists =
     try {
       await addDoc(collection(db, "workOrders"), {
         workOrderNumber: generateWorkOrderNumber(),
-        companyId: selectedProject.companyId || "horizenone-demo",
+        companyId: selectedProject.companyId,
         companyName: selectedProject.companyName || "",
 
         customerId: selectedCustomer.id,
@@ -738,9 +842,14 @@ const availableTechnicianExists =
       });
 
       router.push("/work-orders");
-    } catch (err) {
-      console.error(err);
-      setError("Unable to save work order.");
+    } catch (err: unknown) {
+      console.error("Unable to save work order:", err);
+
+      setError(
+        err instanceof Error
+          ? `Unable to save work order: ${err.message}`
+          : "Unable to save work order."
+      );
     } finally {
       setIsSaving(false);
     }
