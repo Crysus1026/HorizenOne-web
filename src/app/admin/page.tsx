@@ -6,7 +6,10 @@ export default function AdminPage() {
     <AppShell>
       <div className="p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">Admin</h1>
+          <h1 className="text-3xl font-bold text-white">
+            Admin
+          </h1>
+
           <p className="mt-2 text-slate-400">
             Manage system settings, users, and platform configuration.
           </p>
@@ -29,27 +32,30 @@ export default function AdminPage() {
 
           <Link
             href="/admin/technicians"
-            className="rounded-xl border border-slate-800 bg-slate-900 p-6 hover:border-blue-500"
+            className="rounded-xl border border-slate-800 bg-slate-900 p-6 transition hover:border-cyan-400 hover:bg-slate-800"
           >
-            <h2 className="text-xl font-semibold">Technicians</h2>
+            <h2 className="text-xl font-semibold text-white">
+              Technicians
+            </h2>
+
             <p className="mt-2 text-sm text-slate-400">
               Create technicians for dispatch assignment.
             </p>
           </Link>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <Link
+            href="/admin/users"
+            className="rounded-xl border border-slate-800 bg-slate-900 p-6 transition hover:border-cyan-400 hover:bg-slate-800"
+          >
             <h2 className="text-xl font-semibold text-white">
               User Management
             </h2>
 
             <p className="mt-2 text-sm text-slate-400">
-              Manage user accounts, permissions, and role assignments.
+              View user profiles, manage account access, and review role and
+              program assignments.
             </p>
-
-            <p className="mt-4 text-xs text-slate-500">
-              Coming Soon
-            </p>
-          </div>
+          </Link>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
             <h2 className="text-xl font-semibold text-white">
