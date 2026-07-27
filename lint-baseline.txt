@@ -1,0 +1,524 @@
+
+> horizenone-web@0.1.0 lint
+> eslint
+
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/admin/technicians/page.tsx
+  54:10  warning  'isLoading' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  79:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/admin/technicians/page.tsx:79:5
+  77 | useEffect(() => {
+  78 |   if (!isSystemAdmin) {
+> 79 |     setCompanyId(userCompanyId);
+     |     ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  80 |     return;
+  81 |   }
+  82 |     react-hooks/set-state-in-effect
+  93:4   warning  React Hook useEffect has a missing dependency: 'loadCompanies'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    react-hooks/exhaustive-deps
+  99:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/admin/technicians/page.tsx:99:5
+   97 |
+   98 |   if (profileError) {
+>  99 |     setError(profileError);
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  100 |     setIsLoading(false);
+  101 |     return;
+  102 |   }  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/admin/users/page.tsx
+  204:10  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/admin/users/page.tsx:204:10
+  202 |     }
+  203 |
+> 204 |     void loadUsers();
+      |          ^^^^^^^^^ Avoid calling setState() directly within an effect
+  205 |   }, [
+  206 |     isLoadingProfile,
+  207 |     loadUsers,  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/api/system-admin/create-user/route.ts
+  76:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/calendar/page.tsx
+    9:3   warning  'collection' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+   10:3   warning  'getDocs' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+   12:3   warning  'query' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+   15:10  warning  'db' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+  143:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/calendar/page.tsx:143:5
+  141 |
+  142 |   if (profileError) {
+> 143 |     setError(profileError);
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  144 |     setIsLoading(false);
+  145 |     return;
+  146 |   }  react-hooks/set-state-in-effect
+  366:33  warning  'isAssigned' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/customer-schedule/[token]/page.tsx
+  19:7  warning  'timeWindows' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/customers/[id]/edit/page.tsx
+  66:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/customers/[id]/edit/page.tsx:66:7
+  64 |
+  65 |     if (profileError) {
+> 66 |       setError(profileError);
+     |       ^^^^^^^^ Avoid calling setState() directly within an effect
+  67 |       setIsLoadingCustomer(false);
+  68 |       return;
+  69 |     }  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/customers/[id]/page.tsx
+   8:3  warning  'collection' is defined but never used  @typescript-eslint/no-unused-vars
+  11:3  warning  'getDocs' is defined but never used     @typescript-eslint/no-unused-vars
+  12:3  warning  'orderBy' is defined but never used     @typescript-eslint/no-unused-vars
+  13:3  warning  'query' is defined but never used       @typescript-eslint/no-unused-vars
+  14:3  warning  'where' is defined but never used       @typescript-eslint/no-unused-vars
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/customers/page.tsx
+  41:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/customers/page.tsx:41:5
+  39 |
+  40 |   if (profileError) {
+> 41 |     setError(profileError);
+     |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  42 |     setIsLoading(false);
+  43 |     return;
+  44 |   }  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/dashboard/page.tsx
+  29:17  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  64:5   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/dashboard/page.tsx:64:5
+  62 |
+  63 |   if (profileError) {
+> 64 |     setError(profileError);
+     |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  65 |     setIsLoading(false);
+  66 |     return;
+  67 |   }  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/dispatch/page.tsx
+   75:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/dispatch/page.tsx:75:5
+  73 |
+  74 |   if (profileError) {
+> 75 |     setError(profileError);
+     |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  76 |     setIsLoading(false);
+  77 |     return;
+  78 |   }  react-hooks/set-state-in-effect
+  129:4  warning  React Hook useMemo has missing dependencies: 'isWithinDateFilter' and 'matchesSearch'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/inventory/[id]/page.tsx
+  174:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/inventory/[id]/page.tsx:174:5
+  172 |
+  173 |   useEffect(() => {
+> 174 |     loadData();
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  175 |   }, [inventoryItemId]);
+  176 |
+  177 |   const counts = useMemo(() => {  react-hooks/set-state-in-effect
+  175:6  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react-hooks/exhaustive-deps
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/inventory/units/[unitId]/page.tsx
+  110:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+  128:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/inventory/units/[unitId]/page.tsx:128:5
+  126 |
+  127 |   useEffect(() => {
+> 128 |     loadData();
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  129 |   }, [unitId]);
+  130 |
+  131 |   if (isLoading) {  react-hooks/set-state-in-effect
+  129:6   warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/system-admin/inventory-items/page.tsx
+   12:3  warning  'where' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+  113:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/system-admin/inventory-items/page.tsx:113:5
+  111 |
+  112 |   useEffect(() => {
+> 113 |     loadData();
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  114 |   }, []);
+  115 |
+  116 |   async function handleCreateItem(event: React.FormEvent<HTMLFormElement>) {  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/system-admin/page.tsx
+  13:10  warning  'profile' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/system-admin/settings/page.tsx
+  92:13  error  Error: Cannot access variable before it is declared
+
+`loadSettings` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/system-admin/settings/page.tsx:92:13
+  90 |
+  91 |       setIsCheckingAccess(false);
+> 92 |       await loadSettings();
+     |             ^^^^^^^^^^^^ `loadSettings` accessed before it is declared
+  93 |     });
+  94 |
+  95 |     return () => unsubscribe();
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/system-admin/settings/page.tsx:98:3
+   96 |   }, [router]);
+   97 |
+>  98 |   async function loadSettings() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  99 |     setIsLoading(true);
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+> 100 |     setError("");
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+> 147 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+> 148 |   }
+      | ^^^^ `loadSettings` is declared here
+  149 |
+  150 |   async function handleSaveSettings(e: React.FormEvent<HTMLFormElement>) {
+  151 |     e.preventDefault();  react-hooks/immutability
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/system-admin/users/page.tsx
+   15:3   warning  'where' is defined but never used         @typescript-eslint/no-unused-vars
+  203:19  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/technician/page.tsx
+    4:8   warning  'Image' is defined but never used                                @typescript-eslint/no-unused-vars
+  121:51  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/technician/work-orders/[id]/page.tsx
+  960:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/[id]/edit/page.tsx
+  205:3  error    Error: Cannot access variable before it is declared
+
+`loadAdminOptions` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/[id]/edit/page.tsx:205:3
+  203 |
+  204 |   loadWorkOrder();
+> 205 |   loadAdminOptions();
+      |   ^^^^^^^^^^^^^^^^ `loadAdminOptions` accessed before it is declared
+  206 | }, [workOrderId]);
+  207 |
+  208 | useEffect(() => {
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/[id]/edit/page.tsx:231:3
+  229 | ]);
+  230 |
+> 231 |   async function loadAdminOptions() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 232 |   const projectsQuery = query(
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 233 |     collection(db, "projects"),
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 276 |   );
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 277 | }
+      | ^^ `loadAdminOptions` is declared here
+  278 |
+  279 | async function evaluateTechnicianAvailability(
+  280 |   selectedDate: string,                                                       react-hooks/immutability
+  215:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/[id]/edit/page.tsx:215:5
+  213 |     !workOrder
+  214 |   ) {
+> 215 |     setTechnicianConflicts({});
+      |     ^^^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  216 |     return;
+  217 |   }
+  218 |                                                                                                                                       react-hooks/set-state-in-effect
+  219:3  error    Error: Cannot access variable before it is declared
+
+`evaluateTechnicianAvailability` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/[id]/edit/page.tsx:219:3
+  217 |   }
+  218 |
+> 219 |   evaluateTechnicianAvailability(
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `evaluateTechnicianAvailability` accessed before it is declared
+  220 |     scheduledDate,
+  221 |     timeWindow
+  222 |   );
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/[id]/edit/page.tsx:279:1
+  277 | }
+  278 |
+> 279 | async function evaluateTechnicianAvailability(
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 280 |   selectedDate: string,
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+> 281 |   selectedWindow: string
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+> 390 |   }
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+> 391 | }
+      | ^^ `evaluateTechnicianAvailability` is declared here
+  392 |
+  393 |   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
+  394 |   e.preventDefault();  react-hooks/immutability
+  223:4  warning  React Hook useEffect has a missing dependency: 'evaluateTechnicianAvailability'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/[id]/page.tsx
+   50:35  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   51:23  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   59:24  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   60:25  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   63:22  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   98:7   warning  'displayWorkOrderNumber' is assigned a value but never used                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+  751:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/new/page.tsx
+  180:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/new/page.tsx:180:7
+  178 |
+  179 |     if (profileError) {
+> 180 |       setError(profileError);
+      |       ^^^^^^^^ Avoid calling setState() directly within an effect
+  181 |       setIsLoadingOptions(false);
+  182 |       return;
+  183 |     }                                                                                                                                                                      react-hooks/set-state-in-effect
+  355:3  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/new/page.tsx:355:3
+  353 |   if (!selectedCustomer) return;
+  354 |
+> 355 |   setCustomerId(selectedCustomer.id);
+      |   ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  356 | }, [customerIdFromUrl, customers]);
+  357 |
+  358 |   async function checkTechnicianAvailability(                                                                                                                        react-hooks/set-state-in-effect
+  635:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/new/page.tsx:635:7
+  633 |   useEffect(() => {
+  634 |     if (!projectId || !scheduledDate) {
+> 635 |       setTimeWindowAvailability({});
+      |       ^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  636 |       return;
+  637 |     }
+  638 |                                                                                                                                            react-hooks/set-state-in-effect
+  639:5  error    Error: Cannot access variable before it is declared
+
+`checkAllTimeWindowAvailability` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/new/page.tsx:639:5
+  637 |     }
+  638 |
+> 639 |     checkAllTimeWindowAvailability(
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `checkAllTimeWindowAvailability` accessed before it is declared
+  640 |       projectId,
+  641 |       scheduledDate
+  642 |     );
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/new/page.tsx:659:3
+  657 |   }, [projectId, scheduledDate, timeWindow]);
+  658 |
+> 659 |   async function checkAllTimeWindowAvailability(
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 660 |   selectedProjectId: string,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 661 |   selectedDate: string
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 697 |   }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 698 | }
+      | ^^ `checkAllTimeWindowAvailability` is declared here
+  699 |
+  700 |   async function handleSubmit(e: React.FormEvent) {
+  701 |     e.preventDefault();  react-hooks/immutability
+  643:6  warning  React Hook useEffect has a missing dependency: 'checkAllTimeWindowAvailability'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+  647:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/new/page.tsx:647:7
+  645 |   useEffect(() => {
+  646 |     if (!projectId || !scheduledDate || !timeWindow) {
+> 647 |       setHasAvailableTechnician(null);
+      |       ^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  648 |       setAvailabilityMessage("");
+  649 |       return;
+  650 |     }                                                                                         react-hooks/set-state-in-effect
+  657:6  warning  React Hook useEffect has a missing dependency: 'checkTechnicianAvailability'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/page.tsx
+  49:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/app/work-orders/page.tsx:49:7
+  47 |
+  48 |     if (profileError) {
+> 49 |       setError(profileError);
+     |       ^^^^^^^^ Avoid calling setState() directly within an effect
+  50 |       setIsLoading(false);
+  51 |       return;
+  52 |     }  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/components/Sidebar.tsx
+  4:8  warning  'Image' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/components/TopBar.tsx
+  14:9  warning  'initial' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/features/users/hooks/useProfileById.ts
+  123:10  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/features/users/hooks/useProfileById.ts:123:10
+  121 |
+  122 |   useEffect(() => {
+> 123 |     void loadProfile();
+      |          ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  124 |   }, [loadProfile]);
+  125 |
+  126 |   return {  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/hooks/useCompanyCollections.ts
+  55:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/hooks/useCompanyCollections.ts:55:7
+  53 |
+  54 |     if (profileError) {
+> 55 |       setError(profileError);
+     |       ^^^^^^^^ Avoid calling setState() directly within an effect
+  56 |       setIsLoading(false);
+  57 |       return;
+  58 |     }  react-hooks/set-state-in-effect
+
+/Users/lennonj1026/Desktop/HorizenOne/horizenone-web/src/lib/companyQueries.ts
+  4:3  warning  'orderBy' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 62 problems (33 errors, 29 warnings)
+
