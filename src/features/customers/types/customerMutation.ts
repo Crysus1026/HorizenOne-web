@@ -1,4 +1,4 @@
-import type { DuplicateCustomerMatch } from "../services/customerService";
+import type { DuplicateCustomerMatch } from "./customerDuplicate";
 
 export type CustomerMutationResult =
   | {

@@ -4,7 +4,7 @@ import AppShell from "@/components/AppShell";
 import { CustomerForm } from "@/features/customers/components/CustomerForm";
 import { DuplicateCustomerWarning } from "@/features/customers/components/DuplicateCustomerWarning";
 import { useCreateCustomer } from "@/features/customers/hooks/useCreateCustomer";
-import type { DuplicateCustomerMatch } from "@/features/customers/services/customerService";
+import type { DuplicateCustomerMatch } from "@/features/customers/types/customerDuplicate";
 import type { CustomerFormValues } from "@/features/customers/types/customerForm";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

@@ -1,7 +1,7 @@
 import type {
   DuplicateCustomerMatch,
   DuplicateReason,
-} from "../services/customerService";
+} from "../types/customerDuplicate";
 
 type DuplicateCustomerWarningProps = {
   duplicates: DuplicateCustomerMatch[];
@@ -62,7 +62,6 @@ export function DuplicateCustomerWarning({
           >
             <p className="font-medium text-white">
               {customer.customerName ||
-                customer.name ||
                 "Unnamed customer"}
             </p>
 

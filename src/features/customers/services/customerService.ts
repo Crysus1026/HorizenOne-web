@@ -14,6 +14,11 @@ import {
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
+import type {
+  DuplicateCustomerMatch,
+  DuplicateReason,
+} from "../types/customerDuplicate";
+
 import type { CustomerFormValues } from "../types/customerForm";
 import {
   getCustomerNormalizedFields,
@@ -26,17 +31,6 @@ export type CustomerRecord = Customer &
     createdBy?: string;
     updatedBy?: string;
   };
-
-export type DuplicateReason =
-  | "account-number"
-  | "email"
-  | "phone"
-  | "name-and-address";
-
-export type DuplicateCustomerMatch = {
-  customer: CustomerRecord;
-  reasons: DuplicateReason[];
-};
 
 function mapCustomerDocument(
   snapshot: QueryDocumentSnapshot<DocumentData>
