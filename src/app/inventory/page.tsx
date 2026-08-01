@@ -1,19 +1,12 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { db } from "@/lib/firebase";
 import { useUserProfile } from "@/hooks/useUserProfile";
-import {
-  collection,
-  getDocs,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { InventoryItem } from "@/features/inventory/types/inventoryItem";
 import type { InventoryUnit } from "@/features/inventory/types/inventoryUnit";
+import { getInventoryDashboard } from "@/features/inventory/services/inventoryDashboardService";
 
 export default function InventoryPage() {
 
@@ -38,50 +31,23 @@ export default function InventoryPage() {
 }
 
   async function loadInventory() {
-    if (!profile) {
+    if (!profile?.companyId) {
       setItems([]);
       setUnits([]);
       setIsLoading(false);
       return;
     }
+
     setIsLoading(true);
 
     try {
-      const isSystemAdmin =
-        profile.isSystemAdmin === true || profile.role === "System Admin";
+      const dashboardData = await getInventoryDashboard({
+        companyId: profile.companyId,
+        projectId: "",
+      });
 
-      const itemsQuery = isSystemAdmin
-        ? query(collection(db, "inventoryItems"), orderBy("itemName", "asc"))
-        : query(
-            collection(db, "inventoryItems"),
-            where("companyId", "==", profile.companyId || ""),
-            orderBy("itemName", "asc")
-          );
-
-      const unitsQuery = isSystemAdmin
-        ? query(collection(db, "inventoryUnits"))
-        : query(
-            collection(db, "inventoryUnits"),
-            where("companyId", "==", profile.companyId || "")
-          );
-
-      const [itemsSnapshot, unitsSnapshot] = await Promise.all([
-        getDocs(itemsQuery),
-        getDocs(unitsQuery),
-      ]);
-
-      const itemsData = itemsSnapshot.docs.map((document) => ({
-        id: document.id,
-        ...(document.data() as Omit<InventoryItem, "id">),
-      }));
-
-      const unitsData = unitsSnapshot.docs.map((document) => ({
-        id: document.id,
-        ...(document.data() as Omit<InventoryUnit, "id">),
-      }));
-
-      setItems(itemsData);
-      setUnits(unitsData);
+      setItems(dashboardData.items);
+      setUnits(dashboardData.units);
     } catch (error) {
       console.error("Error loading inventory:", error);
       alert("Unable to load inventory.");
