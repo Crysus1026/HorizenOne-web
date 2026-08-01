@@ -16,48 +16,9 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-
-type InventoryItem = {
-  companyId: string;
-  companyName?: string;
-  projectId?: string;
-  projectName?: string;
-  itemName: string;
-  category: string;
-  sku?: string;
-  description?: string;
-  minimumStock?: number;
-  defaultLocationName?: string;
-};
-
-type InventoryUnit = {
-  id: string;
-  companyId?: string;
-  inventoryItemId?: string;
-  itemName?: string;
-  serialNumber: string;
-  status:
-    | "available"
-    | "assigned"
-    | "installed"
-    | "damaged"
-    | "lost"
-    | "returned";
-  locationName?: string;
-  assignedTechnicianId?: string;
-  assignedTechnicianName?: string;
-  workOrderNumber?: string;
-};
-
-type Technician = {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  companyId?: string;
-  role?: string;
-  isActive?: boolean;
-};
+import type { InventoryItem } from "@/features/inventory/types/inventoryItem";
+import type { InventoryUnit } from "@/features/inventory/types/inventoryUnit";
+import type { Technician } from "@/features/technicians/types/technician";
 
 export default function InventoryItemDetailPage() {
   const params = useParams();
@@ -103,7 +64,10 @@ export default function InventoryItemDetailPage() {
         return;
       }
 
-      const itemData = itemSnapshot.data() as InventoryItem;
+      const itemData = {
+        id: itemSnapshot.id,
+        ...(itemSnapshot.data() as Omit<InventoryItem, "id">),
+      };
 
       setItem(itemData);
       setLocationName(itemData.defaultLocationName || "Main Warehouse");

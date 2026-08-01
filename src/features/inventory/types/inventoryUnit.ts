@@ -10,15 +10,23 @@ export type InventoryUnit = {
   id: string;
 
   companyId: string;
-  projectId?: string;
+  companyName?: string;
+
+  projectId: string;
+  projectName?: string;
 
   inventoryItemId: string;
   itemName?: string;
 
-  serialNumber?: string;
+  serialNumber: string;
+  status: InventoryUnitStatus;
+
+  locationId?: string;
+  locationName?: string;
 
   assignedTechnicianId?: string;
   assignedTechnicianName?: string;
 
-  status: InventoryUnitStatus;
+  workOrderId?: string;
+  workOrderNumber?: string;
 };
