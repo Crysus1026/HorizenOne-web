@@ -12,37 +12,8 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-
-type InventoryItem = {
-  id: string;
-  companyId: string;
-  companyName?: string;
-  projectId?: string;
-  projectName?: string;
-  itemName: string;
-  category: string;
-  sku?: string;
-  minimumStock?: number;
-  defaultLocationName?: string;
-  isActive?: boolean;
-};
-
-type InventoryUnit = {
-  id: string;
-  companyId: string;
-  inventoryItemId: string;
-  itemName?: string;
-  serialNumber?: string;
-  assignedTechnicianId?: string;
-  assignedTechnicianName?: string;
-  status:
-    | "available"
-    | "assigned"
-    | "installed"
-    | "damaged"
-    | "lost"
-    | "returned";
-};
+import type { InventoryItem } from "@/features/inventory/types/inventoryItem";
+import type { InventoryUnit } from "@/features/inventory/types/inventoryUnit";
 
 export default function InventoryPage() {
 
