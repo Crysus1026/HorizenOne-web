@@ -6,12 +6,11 @@ export default function AdminPage() {
     <AppShell>
       <div className="p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">
-            Admin
-          </h1>
+          <h1 className="text-3xl font-bold text-white">Admin</h1>
 
           <p className="mt-2 text-slate-400">
-            Manage system settings, users, and platform configuration.
+            Manage company settings, users, programs, and operational
+            configuration.
           </p>
         </div>
 
@@ -20,9 +19,7 @@ export default function AdminPage() {
             href="/admin/service-types"
             className="rounded-xl border border-slate-800 bg-slate-900 p-6 transition hover:border-cyan-400 hover:bg-slate-800"
           >
-            <h2 className="text-xl font-semibold text-white">
-              Service Types
-            </h2>
+            <h2 className="text-xl font-semibold text-white">Service Types</h2>
 
             <p className="mt-2 text-sm text-slate-400">
               Create and manage available service offerings, default durations,
@@ -34,12 +31,11 @@ export default function AdminPage() {
             href="/admin/technicians"
             className="rounded-xl border border-slate-800 bg-slate-900 p-6 transition hover:border-cyan-400 hover:bg-slate-800"
           >
-            <h2 className="text-xl font-semibold text-white">
-              Technicians
-            </h2>
+            <h2 className="text-xl font-semibold text-white">Technicians</h2>
 
             <p className="mt-2 text-sm text-slate-400">
-              Create technicians for dispatch assignment.
+              Create technicians and manage their program assignments for
+              scheduling and dispatch.
             </p>
           </Link>
 
@@ -57,6 +53,20 @@ export default function AdminPage() {
             </p>
           </Link>
 
+          <Link
+            href="/admin/inventory/items"
+            className="rounded-xl border border-slate-800 bg-slate-900 p-6 transition hover:border-cyan-400 hover:bg-slate-800"
+          >
+            <h2 className="text-xl font-semibold text-white">
+              Inventory Item Setup
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Create program-specific inventory items, select serialized or
+              quantity tracking, and configure unit values and minimum stock.
+            </p>
+          </Link>
+
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
             <h2 className="text-xl font-semibold text-white">
               Company Settings
@@ -66,9 +76,7 @@ export default function AdminPage() {
               Configure company information, branding, and system defaults.
             </p>
 
-            <p className="mt-4 text-xs text-slate-500">
-              Coming Soon
-            </p>
+            <p className="mt-4 text-xs text-slate-500">Coming Soon</p>
           </div>
         </div>
       </div>

@@ -1,12 +1,10 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { db } from "@/lib/firebase";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
   orderBy,
   query,
@@ -14,12 +12,6 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-
-type UserProfile = {
-  companyId?: string;
-  role?: string;
-  isSystemAdmin?: boolean;
-};
 
 type InventoryItem = {
   id: string;
@@ -53,7 +45,12 @@ type InventoryUnit = {
 };
 
 export default function InventoryPage() {
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  const {
+    profile,
+    isLoadingProfile,
+    profileError,
+  } = useUserProfile();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [units, setUnits] = useState<InventoryUnit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,7 +66,13 @@ export default function InventoryPage() {
   }));
 }
 
-  async function loadInventory(profile: UserProfile) {
+  async function loadInventory() {
+    if (!profile) {
+      setItems([]);
+      setUnits([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
 
     try {
@@ -117,39 +120,19 @@ export default function InventoryPage() {
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setUserProfile(null);
-        setItems([]);
-        setUnits([]);
-        setIsLoading(false);
-        return;
-      }
+    if (isLoadingProfile) {
+      return;
+    }
 
-      try {
-        const userSnapshot = await getDoc(doc(db, "users", user.uid));
+    if (!profile) {
+      setItems([]);
+      setUnits([]);
+      setIsLoading(false);
+      return;
+    }
 
-        if (!userSnapshot.exists()) {
-          setUserProfile(null);
-          setItems([]);
-          setUnits([]);
-          setIsLoading(false);
-          return;
-        }
-
-        const profile = userSnapshot.data() as UserProfile;
-        setUserProfile(profile);
-
-        await loadInventory(profile);
-      } catch (error) {
-        console.error("Error loading user profile:", error);
-        alert("Unable to load your user profile.");
-        setIsLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+    void loadInventory();
+  }, [isLoadingProfile, profile]);
 
   const inventoryRows = useMemo(() => {
     return items.map((item) => {
@@ -224,7 +207,7 @@ export default function InventoryPage() {
 
   const totalLowStock = inventoryRows.filter((item) => item.isLowStock).length;
 
-  if (isLoading) {
+  if (isLoadingProfile || isLoading) {
     return (
       <AppShell>
         <p className="text-sm text-slate-400">Loading inventory...</p>
@@ -243,10 +226,10 @@ export default function InventoryPage() {
           </p>
         </div>
 
-        {!userProfile ? (
+        {profileError || !profile ? (
           <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
             <p className="text-sm text-slate-400">
-              Unable to load your user profile.
+              {profileError || "Unable to load your user profile."}
             </p>
           </section>
         ) : (
