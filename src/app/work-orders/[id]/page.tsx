@@ -115,24 +115,28 @@ const displayWorkOrderNumber =
         setWorkOrder(data);
         setCompletionNotes(data.completionNotes || "");
 
-        const installedInventoryQuery = query(
-          collection(db, "inventoryUnits"),
-          where("companyId", "==", data.companyId),
-          where("workOrderId", "==", workOrderId)
-        );
+        if (data.projectId) {
+          const installedInventoryQuery = query(
+            collection(db, "inventoryUnits"),
+            where("companyId", "==", data.companyId),
+            where("projectId", "==", data.projectId),
+            where("workOrderId", "==", workOrderId)
+          );
 
-        const installedInventorySnapshot = await getDocs(
-          installedInventoryQuery
-        );
+          const installedInventorySnapshot = await getDocs(
+            installedInventoryQuery
+          );
 
-        const installedInventoryData = installedInventorySnapshot.docs.map(
-          (document) => ({
-            id: document.id,
-            ...(document.data() as Omit<InstalledInventoryUnit, "id">),
-          })
-        );
+          const installedInventoryData =
+            installedInventorySnapshot.docs.map((document) => ({
+              id: document.id,
+              ...(document.data() as Omit<InstalledInventoryUnit, "id">),
+            }));
 
-setInstalledInventoryUnits(installedInventoryData);
+          setInstalledInventoryUnits(installedInventoryData);
+        } else {
+          setInstalledInventoryUnits([]);
+        }
       } catch (error: unknown) {
         console.error("Error loading work order:", error);
 
