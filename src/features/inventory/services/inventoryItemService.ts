@@ -2,10 +2,13 @@ import { db } from "@/lib/firebase";
 import {
   addDoc,
   collection,
+  doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 
@@ -14,6 +17,115 @@ import type {
   InventoryItem,
   InventoryTrackingType,
 } from "../types/inventoryItem";
+
+export type UpdateInventoryItemInput = {
+  itemName: string;
+  category: string;
+  sku?: string;
+  description?: string;
+  unitOfMeasure: string;
+  standardUnitValueCents: number;
+  minimumStock: number;
+  isActive: boolean;
+};
+
+function normalizeTrackingType(
+  trackingType: unknown,
+  requiresSerial: unknown
+): InventoryTrackingType {
+  if (trackingType === "Quantity") {
+    return "Quantity";
+  }
+
+  if (trackingType === "Serialized") {
+    return "Serialized";
+  }
+
+  return requiresSerial === false ? "Quantity" : "Serialized";
+}
+
+function normalizeInventoryItem(
+  documentId: string,
+  data: Record<string, unknown>
+): InventoryItem {
+  const trackingType = normalizeTrackingType(
+    data.trackingType,
+    data.requiresSerial
+  );
+
+  return {
+    id: documentId,
+
+    companyId:
+      typeof data.companyId === "string"
+        ? data.companyId
+        : "",
+
+    companyName:
+      typeof data.companyName === "string"
+        ? data.companyName
+        : "",
+
+    projectId:
+      typeof data.projectId === "string"
+        ? data.projectId
+        : "",
+
+    projectName:
+      typeof data.projectName === "string"
+        ? data.projectName
+        : "",
+
+    itemName:
+      typeof data.itemName === "string"
+        ? data.itemName
+        : "",
+
+    category:
+      typeof data.category === "string"
+        ? data.category
+        : "",
+
+    sku:
+      typeof data.sku === "string"
+        ? data.sku
+        : "",
+
+    description:
+      typeof data.description === "string"
+        ? data.description
+        : "",
+
+    trackingType,
+
+    /*
+     * Temporary compatibility field.
+     * Remove after all inventory pages use trackingType.
+     */
+    requiresSerial:
+      typeof data.requiresSerial === "boolean"
+        ? data.requiresSerial
+        : trackingType === "Serialized",
+
+    unitOfMeasure:
+      typeof data.unitOfMeasure === "string" &&
+      data.unitOfMeasure
+        ? data.unitOfMeasure
+        : "Each",
+
+    standardUnitValueCents:
+      typeof data.standardUnitValueCents === "number"
+        ? data.standardUnitValueCents
+        : 0,
+
+    minimumStock:
+      typeof data.minimumStock === "number"
+        ? data.minimumStock
+        : 0,
+
+    isActive: data.isActive !== false,
+  };
+}
 
 export async function getInventoryItemsForProject({
   companyId,
@@ -35,43 +147,39 @@ export async function getInventoryItemsForProject({
 
   const snapshot = await getDocs(itemsQuery);
 
-  return snapshot.docs.map((document) => {
-    const data = document.data();
+  return snapshot.docs.map((document) =>
+    normalizeInventoryItem(
+      document.id,
+      document.data()
+    )
+  );
+}
 
-    const trackingType: InventoryTrackingType =
-      data.trackingType === "Quantity"
-        ? "Quantity"
-        : "Serialized";
+export async function getInventoryItemById(
+  inventoryItemId: string
+): Promise<InventoryItem | null> {
+  if (!inventoryItemId) {
+    return null;
+  }
 
-    return {
-      id: document.id,
+  const itemReference = doc(
+    db,
+    "inventoryItems",
+    inventoryItemId
+  );
 
-      companyId: data.companyId ?? "",
-      companyName: data.companyName ?? "",
+  const itemSnapshot = await getDoc(
+    itemReference
+  );
 
-      projectId: data.projectId ?? "",
-      projectName: data.projectName ?? "",
+  if (!itemSnapshot.exists()) {
+    return null;
+  }
 
-      itemName: data.itemName ?? "",
-      category: data.category ?? "",
-      sku: data.sku ?? "",
-      description: data.description ?? "",
-
-      trackingType,
-
-      requiresSerial:
-        typeof data.requiresSerial === "boolean"
-          ? data.requiresSerial
-          : trackingType === "Serialized",
-
-      unitOfMeasure: data.unitOfMeasure || "Each",
-      standardUnitValueCents:
-        Number(data.standardUnitValueCents) || 0,
-      minimumStock: Number(data.minimumStock) || 0,
-
-      isActive: data.isActive !== false,
-    };
-  });
+  return normalizeInventoryItem(
+    itemSnapshot.id,
+    itemSnapshot.data()
+  );
 }
 
 export async function createInventoryItem(
@@ -100,14 +208,20 @@ export async function createInventoryItem(
     !Number.isFinite(input.minimumStock) ||
     input.minimumStock < 0
   ) {
-    throw new Error("Minimum stock must be zero or greater.");
+    throw new Error(
+      "Minimum stock must be zero or greater."
+    );
   }
 
   if (
-    !Number.isFinite(input.standardUnitValueCents) ||
+    !Number.isFinite(
+      input.standardUnitValueCents
+    ) ||
     input.standardUnitValueCents < 0
   ) {
-    throw new Error("Standard unit value must be zero or greater.");
+    throw new Error(
+      "Standard unit value must be zero or greater."
+    );
   }
 
   const itemDocument = await addDoc(
@@ -121,19 +235,33 @@ export async function createInventoryItem(
 
       itemName,
       category,
+
       sku: input.sku?.trim() ?? "",
-      description: input.description?.trim() ?? "",
+
+      description:
+        input.description?.trim() ?? "",
 
       trackingType: input.trackingType,
 
       /*
        * Temporary compatibility field for older inventory pages.
        */
-      requiresSerial: input.trackingType === "Serialized",
+      requiresSerial:
+        input.trackingType === "Serialized",
 
-      unitOfMeasure: input.unitOfMeasure,
-      standardUnitValueCents: input.standardUnitValueCents,
-      minimumStock: Math.floor(input.minimumStock),
+      unitOfMeasure:
+        input.unitOfMeasure,
+
+      standardUnitValueCents:
+        Math.round(
+          input.standardUnitValueCents
+        ),
+
+      minimumStock:
+        Math.max(
+          0,
+          Math.floor(input.minimumStock)
+        ),
 
       isActive: true,
 
@@ -143,4 +271,95 @@ export async function createInventoryItem(
   );
 
   return itemDocument.id;
+}
+
+export async function updateInventoryItem(
+  inventoryItemId: string,
+  input: UpdateInventoryItemInput
+): Promise<void> {
+  if (!inventoryItemId) {
+    throw new Error(
+      "Inventory item ID is required."
+    );
+  }
+
+  const itemName = input.itemName.trim();
+  const category = input.category.trim();
+
+  if (!itemName) {
+    throw new Error(
+      "Item name is required."
+    );
+  }
+
+  if (!category) {
+    throw new Error(
+      "Category is required."
+    );
+  }
+
+  if (
+    !input.unitOfMeasure.trim()
+  ) {
+    throw new Error(
+      "Unit of measure is required."
+    );
+  }
+
+  if (
+    !Number.isFinite(input.minimumStock) ||
+    input.minimumStock < 0
+  ) {
+    throw new Error(
+      "Minimum stock must be zero or greater."
+    );
+  }
+
+  if (
+    !Number.isFinite(
+      input.standardUnitValueCents
+    ) ||
+    input.standardUnitValueCents < 0
+  ) {
+    throw new Error(
+      "Standard unit value must be zero or greater."
+    );
+  }
+
+  const itemReference = doc(
+    db,
+    "inventoryItems",
+    inventoryItemId
+  );
+
+  await updateDoc(itemReference, {
+    itemName,
+    category,
+
+    sku:
+      input.sku?.trim() ?? "",
+
+    description:
+      input.description?.trim() ?? "",
+
+    unitOfMeasure:
+      input.unitOfMeasure.trim(),
+
+    standardUnitValueCents:
+      Math.round(
+        input.standardUnitValueCents
+      ),
+
+    minimumStock:
+      Math.max(
+        0,
+        Math.floor(input.minimumStock)
+      ),
+
+    isActive:
+      input.isActive,
+
+    updatedAt:
+      serverTimestamp(),
+  });
 }

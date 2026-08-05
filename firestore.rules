@@ -1,0 +1,656 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /*
+     * AUTHENTICATION AND USER HELPERS
+     */
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userExists() {
+      return isSignedIn()
+        && exists(userPath());
+    }
+
+    function userDoc() {
+      return get(userPath());
+    }
+
+    function isActiveUser() {
+      return userExists()
+        && userDoc().data.isActive == true;
+    }
+
+    function userRole() {
+      return userDoc().data.role;
+    }
+
+    function isSystemAdmin() {
+      return isActiveUser()
+        && (
+          userDoc().data.isSystemAdmin == true
+          || userRole() == "System Admin"
+        );
+    }
+
+    function isAdmin() {
+      return isActiveUser()
+        && userRole() == "Admin";
+    }
+
+    function isManager() {
+      return isActiveUser()
+        && userRole() == "Manager";
+    }
+
+    function isDispatcher() {
+      return isActiveUser()
+        && userRole() == "Dispatcher";
+    }
+
+    function isTechnician() {
+      return isActiveUser()
+        && userRole() == "Technician";
+    }
+
+    function currentCompanyId() {
+      return userDoc().data.companyId;
+    }
+
+    function sameCompany(documentCompanyId) {
+      return isActiveUser()
+        && currentCompanyId() == documentCompanyId;
+    }
+
+    /*
+     * Admins may access all programs within their company.
+     *
+     * Managers, Dispatchers, and Technicians must have the
+     * program explicitly included in their projectIds array.
+     */
+
+    function hasProjectAccess(projectId) {
+      return isActiveUser()
+        && projectId is string
+        && (
+          isSystemAdmin()
+          || isAdmin()
+          || (
+            userDoc().data.projectIds is list
+            && projectId in userDoc().data.projectIds
+          )
+        );
+    }
+
+    function canManageCompanyData() {
+      return isSystemAdmin()
+        || isAdmin()
+        || isManager()
+        || isDispatcher();
+    }
+
+    function canManageInventory() {
+      return isSystemAdmin()
+        || isAdmin()
+        || isManager()
+        || isDispatcher();
+    }
+
+    function canManageTechnicianAvailability() {
+      return isSystemAdmin()
+        || isAdmin()
+        || isManager()
+        || isDispatcher();
+    }
+
+    function canManageTechnicianPrograms() {
+      return isSystemAdmin()
+        || isAdmin()
+        || isManager()
+        || isDispatcher();
+    }
+
+    function canCloseWorkOrders() {
+      return isSystemAdmin()
+        || isAdmin()
+        || isManager();
+    }
+
+    /*
+     * USERS
+     */
+
+    match /users/{userId} {
+      allow read: if isSystemAdmin()
+        || (
+          isSignedIn()
+          && request.auth.uid == userId
+        )
+        || (
+          canManageCompanyData()
+          && sameCompany(resource.data.companyId)
+        );
+
+      /*
+       * Full user creation and deletion remain limited
+       * to System Administrators.
+       */
+
+      allow create, delete: if isSystemAdmin();
+
+      /*
+       * System Administrators may update any user.
+       *
+       * Company management roles may update only:
+       * - projectIds
+       * - updatedAt
+       *
+       * They cannot change company, role, active status,
+       * identity fields, or any other user data through
+       * this permission.
+       */
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageTechnicianPrograms()
+          && sameCompany(resource.data.companyId)
+          && resource.data.role == "Technician"
+          && request.resource.data.companyId
+            == resource.data.companyId
+          && request.resource.data.role
+            == resource.data.role
+          && request.resource.data.projectIds is list
+          && request.resource.data.diff(resource.data)
+            .changedKeys()
+            .hasOnly([
+              "projectIds",
+              "updatedAt"
+            ])
+        );
+    }
+
+    /*
+     * SYSTEM SETTINGS
+     */
+
+    match /systemSettings/{settingsId} {
+      allow read: if isSystemAdmin();
+      allow create, update, delete: if isSystemAdmin();
+    }
+
+    /*
+     * COMPANIES
+     */
+
+    match /companies/{companyDocumentId} {
+      allow read: if isSystemAdmin()
+        || sameCompany(companyDocumentId);
+
+      allow create, update, delete: if isSystemAdmin();
+    }
+
+    /*
+     * PROJECTS
+     */
+
+    match /projects/{projectId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isSystemAdmin();
+    }
+
+    /*
+     * DEVICE TYPES
+     */
+
+    match /deviceTypes/{deviceTypeId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isSystemAdmin();
+    }
+
+    /*
+     * COMPLETION FORM TEMPLATES
+     */
+
+    match /completionFormTemplates/{templateId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isSystemAdmin();
+    }
+
+    /*
+     * INVENTORY ITEM TYPES
+     *
+     * Inventory items are company and program specific.
+     */
+
+    match /inventoryItems/{itemId} {
+
+      allow read: if isSystemAdmin()
+        || (
+          isActiveUser()
+          && sameCompany(resource.data.companyId)
+          && hasProjectAccess(resource.data.projectId)
+        );
+
+      allow create: if isSystemAdmin()
+        || (
+          canManageInventory()
+          && request.resource.data.companyId is string
+          && request.resource.data.projectId is string
+          && sameCompany(request.resource.data.companyId)
+          && hasProjectAccess(request.resource.data.projectId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageInventory()
+          && sameCompany(resource.data.companyId)
+          && hasProjectAccess(resource.data.projectId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+          && request.resource.data.projectId
+            == resource.data.projectId
+        );
+
+      allow delete: if isSystemAdmin();
+    }
+
+    /*
+     * INVENTORY WAREHOUSES
+     *
+     * Warehouses belong to one company and one program.
+     * Warehouses should be deactivated instead of deleted.
+     */
+
+    match /inventoryWarehouses/{warehouseId} {
+
+      allow read: if isSystemAdmin()
+        || (
+          isActiveUser()
+          && sameCompany(resource.data.companyId)
+          && hasProjectAccess(resource.data.projectId)
+        );
+
+      allow create: if isSystemAdmin()
+        || (
+          canManageInventory()
+          && request.resource.data.companyId is string
+          && request.resource.data.projectId is string
+          && request.resource.data.name is string
+          && sameCompany(request.resource.data.companyId)
+          && hasProjectAccess(request.resource.data.projectId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageInventory()
+          && sameCompany(resource.data.companyId)
+          && hasProjectAccess(resource.data.projectId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+          && request.resource.data.projectId
+            == resource.data.projectId
+        );
+
+      allow delete: if false;
+    }
+
+    /*
+     * SERIALIZED INVENTORY UNITS
+     *
+     * Office users are restricted by company and program.
+     * Technicians may access inventory assigned directly
+     * to their own user ID.
+     */
+
+    match /inventoryUnits/{unitId} {
+
+      allow read: if isSystemAdmin()
+        || (
+          isActiveUser()
+          && sameCompany(resource.data.companyId)
+          && hasProjectAccess(resource.data.projectId)
+        )
+        || (
+          isTechnician()
+          && resource.data.assignedTechnicianId
+            == request.auth.uid
+        );
+
+      allow create: if isSystemAdmin()
+        || (
+          canManageInventory()
+          && request.resource.data.companyId is string
+          && request.resource.data.projectId is string
+          && request.resource.data.inventoryItemId is string
+          && sameCompany(request.resource.data.companyId)
+          && hasProjectAccess(request.resource.data.projectId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageInventory()
+          && sameCompany(resource.data.companyId)
+          && hasProjectAccess(resource.data.projectId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+          && request.resource.data.projectId
+            == resource.data.projectId
+          && request.resource.data.inventoryItemId
+            == resource.data.inventoryItemId
+        )
+        || (
+          isTechnician()
+          && resource.data.assignedTechnicianId
+            == request.auth.uid
+          && request.resource.data.assignedTechnicianId
+            == request.auth.uid
+          && request.resource.data.companyId
+            == resource.data.companyId
+          && request.resource.data.projectId
+            == resource.data.projectId
+          && request.resource.data.inventoryItemId
+            == resource.data.inventoryItemId
+        );
+
+      allow delete: if isSystemAdmin();
+    }
+
+    /*
+     * INVENTORY TRANSACTION HISTORY
+     *
+     * Transaction records are append-only.
+     */
+
+    match /inventoryTransactions/{transactionId} {
+
+      allow read: if isSystemAdmin()
+        || (
+          isActiveUser()
+          && sameCompany(resource.data.companyId)
+          && hasProjectAccess(resource.data.projectId)
+        );
+
+      allow create: if isSystemAdmin()
+        || (
+          (
+            canManageInventory()
+            || isTechnician()
+          )
+          && request.resource.data.companyId is string
+          && request.resource.data.projectId is string
+          && sameCompany(request.resource.data.companyId)
+          && hasProjectAccess(request.resource.data.projectId)
+        );
+
+      allow update, delete: if false;
+    }
+
+    /*
+     * CUSTOMERS
+     */
+
+    match /customers/{customerId} {
+      allow read: if isSystemAdmin()
+        || sameCompany(resource.data.companyId);
+
+      allow create: if isSystemAdmin()
+        || (
+          canManageCompanyData()
+          && request.resource.data.companyId is string
+          && sameCompany(request.resource.data.companyId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageCompanyData()
+          && sameCompany(resource.data.companyId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+        );
+
+      allow delete: if isSystemAdmin()
+        || (
+          canManageCompanyData()
+          && sameCompany(resource.data.companyId)
+        );
+    }
+
+    /*
+     * SERVICE TYPES
+     */
+
+    match /serviceTypes/{serviceTypeId} {
+      allow read: if isSystemAdmin()
+        || sameCompany(resource.data.companyId);
+
+      allow create: if isSystemAdmin()
+        || (
+          isAdmin()
+          && request.resource.data.companyId is string
+          && sameCompany(request.resource.data.companyId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          isAdmin()
+          && sameCompany(resource.data.companyId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+        );
+
+      allow delete: if isSystemAdmin()
+        || (
+          isAdmin()
+          && sameCompany(resource.data.companyId)
+        );
+    }
+
+    /*
+     * LEGACY TECHNICIAN COLLECTION
+     *
+     * Your active technician records are currently stored
+     * in the users collection. These rules are retained in
+     * case the technicians collection is still used elsewhere.
+     */
+
+    match /technicians/{technicianId} {
+      allow read: if isSystemAdmin()
+        || sameCompany(resource.data.companyId);
+
+      allow create: if isSystemAdmin()
+        || (
+          isAdmin()
+          && request.resource.data.companyId is string
+          && sameCompany(request.resource.data.companyId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          isAdmin()
+          && sameCompany(resource.data.companyId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+        );
+
+      allow delete: if isSystemAdmin()
+        || (
+          isAdmin()
+          && sameCompany(resource.data.companyId)
+        );
+    }
+
+    /*
+     * TECHNICIAN WEEKLY AVAILABILITY
+     */
+
+    match /technicianAvailability/{availabilityId} {
+      allow read: if isSystemAdmin()
+        || sameCompany(resource.data.companyId);
+
+      allow create: if isSystemAdmin()
+        || (
+          canManageTechnicianAvailability()
+          && request.resource.data.companyId is string
+          && request.resource.data.technicianId is string
+          && request.resource.data.weeklySchedule is map
+          && sameCompany(request.resource.data.companyId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageTechnicianAvailability()
+          && sameCompany(resource.data.companyId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+          && request.resource.data.technicianId
+            == resource.data.technicianId
+          && request.resource.data.weeklySchedule is map
+        );
+
+      allow delete: if isSystemAdmin()
+        || (
+          canManageTechnicianAvailability()
+          && sameCompany(resource.data.companyId)
+        );
+    }
+
+    /*
+     * TECHNICIAN AVAILABILITY EXCEPTIONS
+     */
+
+    match /technicianAvailabilityExceptions/{exceptionId} {
+      allow read: if isSystemAdmin()
+        || sameCompany(resource.data.companyId);
+
+      allow create: if isSystemAdmin()
+        || (
+          canManageTechnicianAvailability()
+          && request.resource.data.companyId is string
+          && request.resource.data.technicianId is string
+          && request.resource.data.date is string
+          && request.resource.data.unavailableWindows is list
+          && sameCompany(request.resource.data.companyId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageTechnicianAvailability()
+          && sameCompany(resource.data.companyId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+          && request.resource.data.technicianId
+            == resource.data.technicianId
+          && request.resource.data.date is string
+          && request.resource.data.unavailableWindows is list
+        );
+
+      allow delete: if isSystemAdmin()
+        || (
+          canManageTechnicianAvailability()
+          && sameCompany(resource.data.companyId)
+        );
+    }
+
+    /*
+     * WORK ORDERS
+     */
+
+    match /workOrders/{workOrderId} {
+
+      /*
+       * Authenticated office and technician access.
+       */
+
+      allow read: if isSystemAdmin()
+        || sameCompany(resource.data.companyId)
+        || (
+          isTechnician()
+          && resource.data.assignedTechnicianId
+            == request.auth.uid
+        );
+
+      allow create: if isSystemAdmin()
+        || (
+          canManageCompanyData()
+          && request.resource.data.companyId is string
+          && sameCompany(request.resource.data.companyId)
+        );
+
+      allow update: if isSystemAdmin()
+        || (
+          canManageCompanyData()
+          && sameCompany(resource.data.companyId)
+          && request.resource.data.companyId
+            == resource.data.companyId
+        )
+        || (
+          isTechnician()
+          && resource.data.assignedTechnicianId
+            == request.auth.uid
+          && request.resource.data.assignedTechnicianId
+            == request.auth.uid
+          && request.resource.data.companyId
+            == resource.data.companyId
+        );
+
+      allow delete: if isSystemAdmin()
+        || (
+          isAdmin()
+          && sameCompany(resource.data.companyId)
+        );
+
+      /*
+       * Public customer scheduling access.
+       */
+
+      allow read: if resource.data.customerScheduleToken is string;
+
+      allow update: if resource.data.customerScheduleToken is string
+        && resource.data.customerScheduleTokenUsed == false
+        && request.resource.data.customerScheduleTokenUsed == true
+        && request.resource.data.customerAcceptedTerms == true
+        && request.resource.data.customerAcceptedWaiver == true
+        && request.resource.data.customerSignatureConfirmed == true
+        && request.resource.data.scheduledBy == "customer"
+        && request.resource.data.companyId
+          == resource.data.companyId
+        && request.resource.data.customerScheduleToken
+          == resource.data.customerScheduleToken
+        && request.resource.data.diff(resource.data)
+          .changedKeys()
+          .hasOnly([
+            "scheduledDate",
+            "timeWindow",
+            "status",
+            "customerAcceptedTerms",
+            "customerAcceptedWaiver",
+            "customerAcceptedAt",
+            "customerScheduledAt",
+            "scheduledBy",
+            "customerSignatureName",
+            "customerSignatureConfirmed",
+            "customerSignedAt",
+            "customerScheduleTokenUsed",
+            "customerConfirmationNumber",
+            "customerConfirmationReceiptUrl",
+            "updatedAt"
+          ]);
+    }
+
+    /*
+     * DEFAULT DENY
+     */
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

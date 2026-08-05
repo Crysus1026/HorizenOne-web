@@ -4,14 +4,10 @@ import AppShell from "@/components/AppShell";
 import { db } from "@/lib/firebase";
 import {
   addDoc,
-  collection,
   doc,
-  getDoc,
-  getDocs,
-  query,
+  collection,
   serverTimestamp,
   updateDoc,
-  where,
 } from "firebase/firestore";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -19,6 +15,13 @@ import { useEffect, useMemo, useState } from "react";
 import type { InventoryItem } from "@/features/inventory/types/inventoryItem";
 import type { InventoryUnit } from "@/features/inventory/types/inventoryUnit";
 import type { Technician } from "@/features/technicians/types/technician";
+import {
+  updateSerializedUnitStatus,
+  assignSerializedUnits,
+  getInventoryItemDetail,
+  receiveSerializedUnits,
+} from "@/features/inventory/services/inventoryItemDetailService";
+import { formatCurrencyFromCents } from "@/features/inventory/utils/inventoryValue";
 
 export default function InventoryItemDetailPage() {
   const params = useParams();
@@ -47,88 +50,50 @@ export default function InventoryItemDetailPage() {
   const [serialSearch, setSerialSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [technicianFilter, setTechnicianFilter] = useState("all");
+  const SERIALIZED_UNITS_PAGE_SIZE = 15;
+
+  const [serializedUnitsPage, setSerializedUnitsPage] = useState(1);
 
   async function loadData() {
-    if (!inventoryItemId) return;
+    if (!inventoryItemId) {
+      setItem(null);
+      setUnits([]);
+      setTechnicians([]);
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
 
     try {
-      const itemRef = doc(db, "inventoryItems", inventoryItemId);
-      const itemSnapshot = await getDoc(itemRef);
+      const detailData =
+        await getInventoryItemDetail(inventoryItemId);
 
-      if (!itemSnapshot.exists()) {
-        setItem(null);
-        setUnits([]);
-        setTechnicians([]);
-        return;
+      setItem(detailData.item);
+      setUnits(detailData.units);
+      setTechnicians(detailData.technicians);
+
+      if (detailData.item) {
+        setLocationName("Main Warehouse");
       }
-
-      const itemData = {
-        id: itemSnapshot.id,
-        ...(itemSnapshot.data() as Omit<InventoryItem, "id">),
-      };
-
-      setItem(itemData);
-      setLocationName(itemData.defaultLocationName || "Main Warehouse");
-
-      const techniciansQuery = query(
-        collection(db, "users"),
-        where("companyId", "==", itemData.companyId),
-        where("role", "==", "Technician"),
-        where("isActive", "==", true)
+    } catch (error) {
+      console.error(
+        "Error loading inventory item:",
+        error
       );
 
-      const unitsQuery = query(
-        collection(db, "inventoryUnits"),
-        where("companyId", "==", itemData.companyId),
-        where("inventoryItemId", "==", inventoryItemId)
-      );
-
-      console.log("Loading inventory detail:", {
-        inventoryItemId,
-        itemCompanyId: itemData.companyId,
-      });
-
-      let techniciansSnapshot;
-
-      try {
-        techniciansSnapshot = await getDocs(techniciansQuery);
-      } catch (error) {
-        console.error("Technicians query failed:", error);
-        throw error;
-      }
-
-      let unitsSnapshot;
-
-      try {
-        unitsSnapshot = await getDocs(unitsQuery);
-      } catch (error) {
-        console.error("Inventory units query failed:", error);
-        throw error;
-      }
-
-      const techniciansData = techniciansSnapshot.docs.map((document) => ({
-        id: document.id,
-        ...(document.data() as Omit<Technician, "id">),
-      }));
-
-      const unitsData = unitsSnapshot.docs.map((document) => ({
-        id: document.id,
-        ...(document.data() as Omit<InventoryUnit, "id">),
-      }));
-
-      setTechnicians(techniciansData);
-      setUnits(unitsData);
-    } catch (error: unknown) {
-      console.error("Error loading inventory item:", error);
+      setItem(null);
+      setUnits([]);
+      setTechnicians([]);
 
       const message =
         error instanceof Error
           ? error.message
           : "Unknown inventory loading error.";
 
-      alert(`Unable to load inventory item: ${message}`);
+      alert(
+        `Unable to load inventory item: ${message}`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -159,7 +124,9 @@ export default function InventoryItemDetailPage() {
   const filteredAssignableUnits = useMemo(() => {
     const search = assignSearch.trim().toLowerCase();
 
-    if (!search) return assignableUnits;
+    if (!search) {
+      return [];
+    }
 
     return assignableUnits.filter((unit) => {
       return (
@@ -205,6 +172,46 @@ export default function InventoryItemDetailPage() {
     });
   }, [units, serialSearch, statusFilter, technicianFilter]);
 
+  const totalSerializedUnitPages = Math.max(
+    1,
+    Math.ceil(
+      filteredUnits.length / SERIALIZED_UNITS_PAGE_SIZE
+    )
+  );
+
+  const paginatedUnits = useMemo(() => {
+    const startIndex =
+      (serializedUnitsPage - 1) *
+      SERIALIZED_UNITS_PAGE_SIZE;
+
+    return filteredUnits.slice(
+      startIndex,
+      startIndex + SERIALIZED_UNITS_PAGE_SIZE
+    );
+  }, [filteredUnits, serializedUnitsPage]);
+
+  useEffect(() => {
+    setSerializedUnitsPage(1);
+  }, [
+    serialSearch,
+    statusFilter,
+    technicianFilter,
+  ]);
+
+  useEffect(() => {
+    if (
+      serializedUnitsPage >
+      totalSerializedUnitPages
+    ) {
+      setSerializedUnitsPage(
+        totalSerializedUnitPages
+      );
+    }
+  }, [
+    serializedUnitsPage,
+    totalSerializedUnitPages,
+  ]);
+
   function getTechnicianName(technician: Technician) {
     const fullName = `${technician.firstName || ""} ${
       technician.lastName || ""
@@ -224,24 +231,37 @@ export default function InventoryItemDetailPage() {
   }
 
   function toggleSelectAllAvailable() {
-    const availableIds = filteredAssignableUnits.map((unit) => unit.id);
+    const resultIds = filteredAssignableUnits.map((unit) => unit.id);
 
-    if (selectedUnitIds.length === availableIds.length) {
-      setSelectedUnitIds([]);
+    const allResultsSelected =
+      resultIds.length > 0 &&
+      resultIds.every((id) => selectedUnitIds.includes(id));
+
+    if (allResultsSelected) {
+      setSelectedUnitIds((current) =>
+        current.filter((id) => !resultIds.includes(id))
+      );
+
       return;
     }
 
-    setSelectedUnitIds(availableIds);
+    setSelectedUnitIds((current) =>
+      Array.from(new Set([...current, ...resultIds]))
+    );
   }
 
-  async function handleReceiveUnits(event: React.FormEvent<HTMLFormElement>) {
+  async function handleReceiveUnits(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
-    if (!item) return;
+    if (!item) {
+      return;
+    }
 
     const serialList = serialNumbers
       .split("\n")
-      .map((serial) => serial.trim())
+      .map((serialNumber) => serialNumber.trim())
       .filter(Boolean);
 
     if (serialList.length === 0) {
@@ -249,15 +269,22 @@ export default function InventoryItemDetailPage() {
       return;
     }
 
-    const uniqueSerialList = Array.from(new Set(serialList));
+    const uniqueSerialList = Array.from(
+      new Set(serialList)
+    );
 
     const existingSerials = new Set(
-      units.map((unit) => unit.serialNumber.trim().toLowerCase())
+      units.map((unit) =>
+        unit.serialNumber.trim().toLowerCase()
+      )
     );
 
-    const duplicateExistingSerials = uniqueSerialList.filter((serial) =>
-      existingSerials.has(serial.toLowerCase())
-    );
+    const duplicateExistingSerials =
+      uniqueSerialList.filter((serialNumber) =>
+        existingSerials.has(
+          serialNumber.toLowerCase()
+        )
+      );
 
     if (duplicateExistingSerials.length > 0) {
       alert(
@@ -276,36 +303,13 @@ export default function InventoryItemDetailPage() {
     setIsSaving(true);
 
     try {
-      for (const serialNumber of uniqueSerialList) {
-        const unitRef = await addDoc(collection(db, "inventoryUnits"), {
-          companyId: item.companyId,
-          companyName: item.companyName || "",
-          projectId: item.projectId || "",
-          projectName: item.projectName || "",
-          inventoryItemId,
-          itemName: item.itemName,
-          serialNumber,
-          status: "available",
-          locationName: locationName.trim(),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        await addDoc(collection(db, "inventoryTransactions"), {
-          companyId: item.companyId,
-          companyName: item.companyName || "",
-          projectId: item.projectId || "",
-          projectName: item.projectName || "",
-          inventoryItemId,
-          inventoryUnitId: unitRef.id,
-          itemName: item.itemName,
-          serialNumber,
-          type: "received",
-          toLocationName: locationName.trim(),
-          notes: notes.trim(),
-          createdAt: serverTimestamp(),
-        });
-      }
+      await receiveSerializedUnits({
+        item,
+        inventoryItemId,
+        serialNumbers: uniqueSerialList,
+        locationName,
+        notes,
+      });
 
       setSerialNumbers("");
       setNotes("");
@@ -314,8 +318,17 @@ export default function InventoryItemDetailPage() {
 
       alert("Serialized units received successfully.");
     } catch (error) {
-      console.error("Error receiving serialized units:", error);
-      alert("Unable to receive serialized units.");
+      console.error(
+        "Error receiving serialized units:",
+        error
+      );
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to receive serialized units.";
+
+      alert(message);
     } finally {
       setIsSaving(false);
     }
@@ -335,7 +348,8 @@ export default function InventoryItemDetailPage() {
     }
 
     const selectedTechnician = technicians.find(
-      (technician) => technician.id === selectedTechnicianId
+      (technician) =>
+        technician.id === selectedTechnicianId
     );
 
     if (!selectedTechnician) {
@@ -343,53 +357,47 @@ export default function InventoryItemDetailPage() {
       return;
     }
 
-    const selectedTechnicianName = getTechnicianName(selectedTechnician);
+    const selectedTechnicianName =
+      getTechnicianName(selectedTechnician);
 
-    const selectedUnits = units.filter((unit) =>
-      selectedUnitIds.includes(unit.id)
+    const selectedUnits = units.filter(
+      (unit) =>
+        selectedUnitIds.includes(unit.id)
     );
 
     setIsAssigning(true);
 
     try {
-      for (const unit of selectedUnits) {
-        if (unit.status !== "available" && unit.status !== "returned") continue;
-
-        await updateDoc(doc(db, "inventoryUnits", unit.id), {
-          status: "assigned",
-          assignedTechnicianId: selectedTechnician.id,
-          assignedTechnicianName: selectedTechnicianName,
-          locationName: "",
-          updatedAt: serverTimestamp(),
-        });
-
-        await addDoc(collection(db, "inventoryTransactions"), {
-          companyId: item.companyId,
-          companyName: item.companyName || "",
-          projectId: item.projectId || "",
-          projectName: item.projectName || "",
-          inventoryItemId,
-          inventoryUnitId: unit.id,
-          itemName: item.itemName,
-          serialNumber: unit.serialNumber,
-          type: "assigned_to_tech",
-          fromLocationName: unit.locationName || "",
-          toTechnicianId: selectedTechnician.id,
-          toTechnicianName: selectedTechnicianName,
-          notes: "Bulk assigned to technician",
-          createdAt: serverTimestamp(),
-        });
-      }
+      await assignSerializedUnits({
+        item,
+        inventoryItemId,
+        units: selectedUnits,
+        technician: selectedTechnician,
+        technicianName:
+          selectedTechnicianName,
+      });
 
       setSelectedTechnicianId("");
       setSelectedUnitIds([]);
+      setAssignSearch("");
 
       await loadData();
 
-      alert("Selected units assigned successfully.");
+      alert(
+        "Selected units assigned successfully."
+      );
     } catch (error) {
-      console.error("Error assigning selected units:", error);
-      alert("Unable to assign selected units.");
+      console.error(
+        "Error assigning selected units:",
+        error
+      );
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to assign selected units.";
+
+      alert(message);
     } finally {
       setIsAssigning(false);
     }
@@ -416,64 +424,17 @@ export default function InventoryItemDetailPage() {
   setStatusActionUnitId(unit.id);
 
   try {
-    const updateData =
-      newStatus === "returned"
-        ? {
-            status: "returned",
-            locationName: item.defaultLocationName || "Main Warehouse",
-            assignedTechnicianId: "",
-            assignedTechnicianName: "",
-            updatedAt: serverTimestamp(),
-          }
-        : newStatus === "installed"
-          ? {
-              status: "installed",
-              locationName: "",
-              assignedTechnicianId: "",
-              assignedTechnicianName: "",
-              updatedAt: serverTimestamp(),
-            }
-          : {
-              status: newStatus,
-              updatedAt: serverTimestamp(),
-            };
-
-    await updateDoc(doc(db, "inventoryUnits", unit.id), updateData);
-
-    await addDoc(collection(db, "inventoryTransactions"), {
-      companyId: item.companyId,
-      companyName: item.companyName || "",
-
-      projectId: item.projectId || "",
-      projectName: item.projectName || "",
-
+    await updateSerializedUnitStatus({
+      item,
       inventoryItemId,
-      inventoryUnitId: unit.id,
+      unit,
+      newStatus,
+      notes: statusActionNotes,
+    });
 
-      itemName: item.itemName,
-      serialNumber: unit.serialNumber,
+    setStatusActionNotes("");
 
-      type: newStatus,
-
-      fromLocationName: unit.locationName || "",
-      fromTechnicianId: unit.assignedTechnicianId || "",
-      fromTechnicianName: unit.assignedTechnicianName || "",
-
-      toLocationName:
-        newStatus === "returned"
-          ? item.defaultLocationName || "Main Warehouse"
-          : "",
-
-        notes:
-          statusActionNotes.trim() ||
-          (newStatus === "returned"
-            ? "Marked RTU / returned from item detail page"
-            : newStatus === "installed"
-              ? "Marked installed and removed from technician inventory"
-              : `Marked ${newStatus} from item detail page`),
-
-              createdAt: serverTimestamp(),
-            });
+    await loadData();
 
     setStatusActionNotes("");
 
@@ -616,8 +577,33 @@ export default function InventoryItemDetailPage() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="text-sm font-medium text-slate-300">
+                Program
+              </span>
+
+              <input
+                value={item.projectName || "No program assigned"}
+                readOnly
+                className="mt-1 w-full cursor-not-allowed rounded-lg border border-slate-700 bg-slate-950 p-2 text-slate-400"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-slate-300">
+                Unit Value
+              </span>
+
+              <input
+                value={formatCurrencyFromCents(item.standardUnitValueCents)}
+                readOnly
+                className="mt-1 w-full cursor-not-allowed rounded-lg border border-slate-700 bg-slate-950 p-2 text-slate-400"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-slate-300">
                 Location *
               </span>
+
               <input
                 value={locationName}
                 onChange={(event) => setLocationName(event.target.value)}
@@ -627,7 +613,10 @@ export default function InventoryItemDetailPage() {
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-slate-300">Notes</span>
+              <span className="text-sm font-medium text-slate-300">
+                Notes
+              </span>
+
               <input
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
@@ -640,12 +629,14 @@ export default function InventoryItemDetailPage() {
               <span className="text-sm font-medium text-slate-300">
                 Serial Numbers *
               </span>
+
               <textarea
                 value={serialNumbers}
                 onChange={(event) => setSerialNumbers(event.target.value)}
                 rows={8}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
-                placeholder={`X2S-1001
+                placeholder={
+                  `X2S-1001
 X2S-1002
 X2S-1003`}
               />
@@ -710,9 +701,10 @@ X2S-1003`}
               <button
                 type="button"
                 onClick={toggleSelectAllAvailable}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                disabled={filteredAssignableUnits.length === 0}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Select All Assignable
+                Select All Results
               </button>
 
               <button
@@ -733,11 +725,15 @@ X2S-1003`}
               <p className="p-4 text-sm text-slate-400">
                 No available units to assign.
               </p>
-              ) : filteredAssignableUnits.length === 0 ? (
-                <p className="p-4 text-sm text-slate-400">
-                  No available units match your search.
-                </p>
-              ) : (
+            ) : !assignSearch.trim() ? (
+              <p className="p-4 text-sm text-slate-400">
+                Search by serial number, item, or location to find inventory to assign.
+              </p>
+            ) : filteredAssignableUnits.length === 0 ? (
+              <p className="p-4 text-sm text-slate-400">
+                No available units match your search.
+              </p>
+            ) : (
                 <div className="max-h-72 overflow-y-auto">
                   {filteredAssignableUnits.map((unit) => (
                   <label
@@ -841,7 +837,19 @@ X2S-1003`}
 
   <div className="mt-4 flex items-center justify-between gap-4 text-sm text-slate-400">
     <p>
-      Showing {filteredUnits.length} of {units.length} units
+      Showing{" "}
+      {filteredUnits.length === 0
+        ? 0
+        : (serializedUnitsPage - 1) *
+            SERIALIZED_UNITS_PAGE_SIZE +
+          1}
+      {" - "}
+      {Math.min(
+        serializedUnitsPage *
+          SERIALIZED_UNITS_PAGE_SIZE,
+        filteredUnits.length
+      )}{" "}
+      of {filteredUnits.length} matching units
     </p>
 
     <button
@@ -880,7 +888,7 @@ X2S-1003`}
         </thead>
 
         <tbody>
-          {filteredUnits.map((unit) => (
+          {paginatedUnits.map((unit) => (
             <tr
               key={unit.id}
               className="border-b border-slate-800 text-slate-200"
@@ -980,10 +988,53 @@ X2S-1003`}
             </tr>
           ))}
         </tbody>
-      </table>
-    </div>
-  )}
-</section>
+            </table>
+          </div>
+        )}
+
+        {filteredUnits.length > SERIALIZED_UNITS_PAGE_SIZE ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
+            <p className="text-sm text-slate-400">
+              Page {serializedUnitsPage} of{" "}
+              {totalSerializedUnitPages}
+            </p>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setSerializedUnitsPage((current) =>
+                    Math.max(1, current - 1)
+                  )
+                }
+                disabled={serializedUnitsPage === 1}
+                className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSerializedUnitsPage((current) =>
+                    Math.min(
+                      totalSerializedUnitPages,
+                      current + 1
+                    )
+                  )
+                }
+                disabled={
+                  serializedUnitsPage ===
+                  totalSerializedUnitPages
+                }
+                className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </section>
       </div>
     </AppShell>
   );

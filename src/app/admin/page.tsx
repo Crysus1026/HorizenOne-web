@@ -67,6 +67,20 @@ export default function AdminPage() {
             </p>
           </Link>
 
+          <Link
+            href="/admin/inventory/warehouses"
+            className="rounded-xl border border-slate-800 bg-slate-900 p-6 transition hover:border-cyan-400 hover:bg-slate-800"
+          >
+            <h2 className="text-xl font-semibold text-white">
+              Inventory Warehouses
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Create and manage program-specific warehouse locations
+              used for inventory receiving and returns.
+            </p>
+          </Link>
+
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
             <h2 className="text-xl font-semibold text-white">
               Company Settings

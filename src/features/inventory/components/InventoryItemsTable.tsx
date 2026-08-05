@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { InventoryItem } from "../types/inventoryItem";
 import { formatCurrencyFromCents } from "../utils/inventoryValue";
 
@@ -52,6 +54,7 @@ export function InventoryItemsTable({
                 <th className="py-2 pr-4">SKU</th>
                 <th className="py-2 pr-4">Min Stock</th>
                 <th className="py-2 pr-4">Unit Value</th>
+                <th className="py-2 pr-4">Actions</th>
               </tr>
             </thead>
 
@@ -89,6 +92,15 @@ export function InventoryItemsTable({
                     {formatCurrencyFromCents(
                       item.standardUnitValueCents
                     )}
+                  </td>
+
+                  <td className="py-3 pr-4">
+                    <Link
+                      href={`/admin/inventory/items/${item.id}/edit`}
+                      className="text-sm font-medium text-cyan-400 hover:text-cyan-300"
+                    >
+                      Edit
+                    </Link>
                   </td>
                 </tr>
               ))}
