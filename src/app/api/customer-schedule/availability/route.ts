@@ -32,6 +32,8 @@ type TechnicianRecord = {
   projectIds?: string[];
   role?: string;
   isActive?: boolean;
+  technicianEnabled?: boolean;
+  technicianId?: string;
 };
 
 type AvailabilityRecord = {
@@ -162,7 +164,7 @@ export async function GET(request: NextRequest) {
     const technicianSnapshot = await adminDb
       .collection("users")
       .where("companyId", "==", workOrder.companyId)
-      .where("role", "==", "Technician")
+      .where("technicianEnabled", "==", true)
       .where("isActive", "==", true)
       .get();
 

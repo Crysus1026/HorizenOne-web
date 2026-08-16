@@ -99,3 +99,16 @@ export function canEditUserCompany(
       viewer.isSystemAdmin
   );
 }
+
+export function canPerformFieldWork(
+  profile: UserProfile | null
+): boolean {
+  if (!profile || !profile.isActive) {
+    return false;
+  }
+
+  return (
+    profile.role === "Technician" ||
+    profile.technicianEnabled === true
+  );
+}

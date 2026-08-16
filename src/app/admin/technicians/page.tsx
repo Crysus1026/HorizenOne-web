@@ -197,6 +197,7 @@ async function generateEmployeeId(selectedCompanyId: string) {
         email: email.trim(),
         phone: phone.trim(),
         role: "Technician",
+        technicianEnabled: true,
         companyId,
         employeeId: generatedEmployeeId,
         projectIds: [],

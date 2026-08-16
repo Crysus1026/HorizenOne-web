@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 type TechnicianTopBarProps = {
   title?: string;
@@ -17,6 +18,12 @@ export default function TechnicianTopBar({
   subtitle,
 }: TechnicianTopBarProps) {
   const router = useRouter();
+  const { profile } = useUserProfile();
+
+  const isHybridOfficeUser =
+    profile &&
+    profile.role !== "Technician" &&
+    profile.technicianEnabled === true;
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   async function handleSignOut() {
@@ -61,6 +68,16 @@ export default function TechnicianTopBar({
 
           {isProfileMenuOpen ? (
             <div className="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-slate-800 bg-slate-950 p-2 shadow-xl">
+              {isHybridOfficeUser && (
+                <Link
+                  href="/dashboard"
+                  onClick={() => setIsProfileMenuOpen(false)}
+                  className="block rounded-lg px-3 py-2 text-sm text-cyan-300 hover:bg-cyan-500/10 hover:text-cyan-200"
+                >
+                  Back to Office
+                </Link>
+              )}
+              
               <Link
                 href="/technician/inventory"
                 onClick={() => setIsProfileMenuOpen(false)}

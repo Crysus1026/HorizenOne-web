@@ -17,6 +17,7 @@ type WorkOrder = {
   id: string;
   workOrderNumber?: string;
   customerName?: string;
+  projectId?: string;
   projectName?: string;
   serviceTypeName?: string;
   deviceTypeName?: string;
@@ -36,6 +37,7 @@ type UserProfile = {
   email?: string;
   role?: string;
   isActive?: boolean;
+  technicianEnabled?: boolean;
 };
 
 function todayString() {
@@ -45,6 +47,7 @@ function todayString() {
 
 export default function DashboardPage() {
     const {
+    profile,  
     companyId,
     isSystemAdmin,
     isLoadingProfile,
@@ -91,22 +94,40 @@ useEffect(() => {
           );
 
       const usersQuery = isSystemAdmin
-        ? query(collection(db, "users"), orderBy("email", "asc"))
+        ? query(
+            collection(db, "users"),
+            where("technicianEnabled", "==", true),
+            orderBy("email", "asc")
+          )
         : query(
             collection(db, "users"),
             where("companyId", "==", companyId),
-            where("role", "==", "Technician")
+            where("technicianEnabled", "==", true)
           );
 
       const workOrdersSnap = await getDocs(workOrdersQuery);
       const usersSnap = await getDocs(usersQuery);
 
-      setWorkOrders(
-        workOrdersSnap.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<WorkOrder, "id">),
-        }))
-      );
+      const loadedWorkOrders: WorkOrder[] =
+        workOrdersSnap.docs.map((document) => ({
+          id: document.id,
+          ...(document.data() as Omit<WorkOrder, "id">),
+        }));
+
+      const scopedWorkOrders =
+        isSystemAdmin || profile?.role === "Admin"
+          ? loadedWorkOrders
+          : loadedWorkOrders.filter((workOrder) => {
+              if (!workOrder.projectId) {
+                return false;
+              }
+
+              return profile?.projectIds.includes(
+                workOrder.projectId
+              );
+            });
+
+      setWorkOrders(scopedWorkOrders);
 
       setUsers(
         usersSnap.docs.map((doc) => ({
@@ -123,7 +144,13 @@ useEffect(() => {
   }
 
   loadDashboard();
-}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
+}, [
+  profile,
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+]);
 
   const dashboardData = useMemo(() => {
     const openWorkOrders = workOrders.filter(
@@ -160,7 +187,9 @@ useEffect(() => {
       .slice(0, 8);
 
     const activeTechnicians = users.filter(
-      (user) => user.isActive !== false && user.role === "Technician"
+      (user) =>
+        user.isActive !== false &&
+        user.technicianEnabled === true
     );
 
     return {

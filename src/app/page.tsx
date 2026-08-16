@@ -21,11 +21,15 @@ export default function HomePage() {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const role = userDoc.data()?.role;
+    const userData = userDoc.data();
+    const role = userData?.role;
 
     if (role === "Technician") {
       router.push("/technician");
-    } else if (role === "System Admin" || userDoc.data()?.isSystemAdmin === true) {
+    } else if (
+      role === "System Admin" ||
+      userData?.isSystemAdmin === true
+    ) {
       router.push("/system-admin");
     } else {
       router.push("/dashboard");

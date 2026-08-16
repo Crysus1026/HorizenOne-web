@@ -79,6 +79,8 @@ type Technician = {
   projectIds?: string[];
   role?: string;
   isActive?: boolean;
+  technicianEnabled?: boolean;
+  technicianId?: string;
 };
 
 type TechnicianAvailability = {
@@ -417,7 +419,7 @@ function NewWorkOrderPageContent() {
       const techniciansQuery = query(
         collection(db, "users"),
         where("companyId", "==", selectedProject.companyId),
-        where("role", "==", "Technician"),
+        where("technicianEnabled", "==", true),
         where("isActive", "==", true)
       );
 

@@ -189,7 +189,7 @@ export async function getInventoryItemDetail(
   const techniciansQuery = query(
     collection(db, "users"),
     where("companyId", "==", item.companyId),
-    where("role", "==", "Technician"),
+    where("technicianEnabled", "==", true),
     where("isActive", "==", true)
   );
 

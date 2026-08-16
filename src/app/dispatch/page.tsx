@@ -17,6 +17,7 @@ type WorkOrder = {
   id: string;
   accountNumber?: string;
   customerName?: string;
+  projectId?: string;
   streetAddress?: string;
   customerAddress?: string;
   serviceAddress?: string;
@@ -40,15 +41,20 @@ type WorkOrder = {
 type Technician = {
   id: string;
   name?: string;
+  firstName?: string;
+  lastName?: string;
   displayName?: string;
   email?: string;
   role?: string;
+  projectIds?: string[];
+  technicianEnabled?: boolean;
 };
 
 const STATUS_COLUMNS = ["Scheduled", "Assigned", "Completed", "Closed"];
 
 export default function DispatchPage() {
   const {
+  profile,  
   companyId,
   isSystemAdmin,
   isLoadingProfile,
@@ -98,18 +104,43 @@ useEffect(() => {
         ]
       );
 
+      const scopedWorkOrders =
+        isSystemAdmin || profile?.role === "Admin"
+          ? workOrdersData
+          : workOrdersData.filter((workOrder) => {
+              if (!workOrder.projectId) {
+                return false;
+              }
+
+              return profile?.projectIds.includes(
+                workOrder.projectId
+              );
+            });
+
       const techniciansData = await getCompanyCollection<Technician>(
         "users",
         companyId,
         isSystemAdmin,
         [
-          where("role", "==", "Technician"),
+          where("technicianEnabled", "==", true),
         ]
       );
 
-      setTechnicians(techniciansData);
+      const scopedTechnicians =
+        isSystemAdmin || profile?.role === "Admin"
+          ? techniciansData
+          : techniciansData.filter((technician) => {
+              if (!Array.isArray(technician.projectIds)) {
+                return false;
+              }
 
-      setWorkOrders(workOrdersData);
+              return technician.projectIds.some((projectId) =>
+                profile?.projectIds.includes(projectId)
+              );
+            });
+
+      setTechnicians(scopedTechnicians);
+      setWorkOrders(scopedWorkOrders);
     } catch (err) {
       console.error(err);
       setError("Unable to load dispatch board.");
@@ -119,7 +150,13 @@ useEffect(() => {
   }
 
   loadDispatchData();
-}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
+}, [
+  profile,
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+]);
 
   const filteredWorkOrders = useMemo(() => {
   return workOrders.filter(
@@ -172,7 +209,11 @@ const completedCount = filteredWorkOrders.filter(
     );
 
     const technicianName =
-      technician?.name || technician?.displayName || technician?.email || "";
+      technician?.name ||
+      `${technician?.firstName || ""} ${technician?.lastName || ""}`.trim() ||
+      technician?.displayName ||
+      technician?.email ||
+      "";
 
     try {
       setIsAssigning(true);
@@ -208,7 +249,11 @@ const completedCount = filteredWorkOrders.filter(
   return technicians
     .map((technician) => {
       const technicianName =
-        technician.name || technician.displayName || technician.email || technician.id;
+        technician.name ||
+        `${technician.firstName || ""} ${technician.lastName || ""}`.trim() ||
+        technician.displayName ||
+        technician.email ||
+        technician.id;
 
       const assignedJobs = filteredWorkOrders.filter(
         (workOrder) =>
@@ -617,6 +662,7 @@ function isWithinDateFilter(workOrder: WorkOrder) {
                   {technicians.map((technician) => (
                     <option key={technician.id} value={technician.id}>
                       {technician.name ||
+                      `${technician.firstName || ""} ${technician.lastName || ""}`.trim() ||
                         technician.displayName ||
                         technician.email ||
                         technician.id}

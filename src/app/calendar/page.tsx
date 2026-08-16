@@ -17,9 +17,13 @@ import { db } from "@/lib/firebase";
 type Technician = {
   id: string;
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   role?: string;
+  projectIds?: string[];
   isActive?: boolean;
+  technicianEnabled?: boolean;
 };
 
 type WorkOrder = {
@@ -27,6 +31,7 @@ type WorkOrder = {
   workOrderNumber?: string;
   customerName?: string;
   address?: string;
+  projectId?: string;
   serviceTypeName?: string;
   scheduledDate?: string;
   timeWindow?: string;
@@ -36,6 +41,15 @@ type WorkOrder = {
   isActive?: boolean;
   serviceDurationMinutes?: number;
 };
+
+function getTechnicianName(technician: Technician): string {
+  return (
+    technician.name ||
+    `${technician.firstName || ""} ${technician.lastName || ""}`.trim() ||
+    technician.email ||
+    "Technician"
+  );
+}
 
 function formatDateInput(date: Date) {
   const year = date.getFullYear();
@@ -92,6 +106,7 @@ function getStartMinutes(timeWindow?: string) {
 
 export default function CalendarPage() {
   const {
+  profile,  
   companyId,
   isSystemAdmin,
   isLoadingProfile,
@@ -129,12 +144,24 @@ export default function CalendarPage() {
   ).length;
 
   const openTechniciansCount = technicians.filter((technician) => {
+    const technicianName = getTechnicianName(technician);
+
     return selectedDateWorkOrders.some(
       (workOrder) =>
         workOrder.assignedTechnicianId === technician.id ||
-        workOrder.assignedTechnicianName === technician.name
+        workOrder.assignedTechnicianName === technicianName
     );
   }).length;
+
+  const visibleTechnicians = technicians.filter((technician) => {
+    const technicianName = getTechnicianName(technician);
+
+    return selectedDateWorkOrders.some(
+      (workOrder) =>
+        workOrder.assignedTechnicianId === technician.id ||
+        workOrder.assignedTechnicianName === technicianName
+    );
+  });
 
 useEffect(() => {
   if (isLoadingProfile) return;
@@ -171,28 +198,61 @@ useEffect(() => {
         companyId,
         isSystemAdmin,
         [
-          where("role", "==", "Technician"),
+          where("technicianEnabled", "==", true),
         ]
       );
 
-      const sortedTechnicians = [...techniciansData].sort((a, b) => {
-        const aCount = workOrdersData.filter(
+      const scopedWorkOrders =
+        isSystemAdmin || profile?.role === "Admin"
+          ? workOrdersData
+          : workOrdersData.filter((workOrder) => {
+              if (!workOrder.projectId) {
+                return false;
+              }
+
+              return profile?.projectIds.includes(
+                workOrder.projectId
+              );
+            });
+
+      const scopedTechnicians =
+        isSystemAdmin || profile?.role === "Admin"
+          ? techniciansData
+          : techniciansData.filter((technician) => {
+              if (!Array.isArray(technician.projectIds)) {
+                return false;
+              }
+
+              return technician.projectIds.some((projectId) =>
+                profile?.projectIds.includes(projectId)
+              );
+            });
+
+      const sortedTechnicians = [...scopedTechnicians].sort((a, b) => {
+        const aName = getTechnicianName(a);
+        const bName = getTechnicianName(b);
+
+        const aCount = scopedWorkOrders.filter(
           (workOrder) =>
             workOrder.assignedTechnicianId === a.id ||
-            workOrder.assignedTechnicianName === a.name
+            workOrder.assignedTechnicianName === aName
         ).length;
 
-        const bCount = workOrdersData.filter(
+        const bCount = scopedWorkOrders.filter(
           (workOrder) =>
             workOrder.assignedTechnicianId === b.id ||
-            workOrder.assignedTechnicianName === b.name
+            workOrder.assignedTechnicianName === bName
         ).length;
 
-        return bCount - aCount;
+        if (bCount !== aCount) {
+          return bCount - aCount;
+        }
+
+        return aName.localeCompare(bName);
       });
 
       setTechnicians(sortedTechnicians);
-      setWorkOrders(workOrdersData);
+      setWorkOrders(scopedWorkOrders);
     } catch (err) {
       console.error(err);
       setError("Unable to load calendar.");
@@ -202,7 +262,13 @@ useEffect(() => {
   }
 
   loadCalendarData();
-}, [companyId, isSystemAdmin, isLoadingProfile, profileError]);
+}, [
+  profile,
+  companyId,
+  isSystemAdmin,
+  isLoadingProfile,
+  profileError,
+]);
 
   function moveDay(amount: number) {
     const nextDate = new Date(selectedDate);
@@ -225,18 +291,20 @@ useEffect(() => {
 }
 
   function getWorkOrdersForTechnician(technician: Technician) {
+    const technicianName = getTechnicianName(technician);
+
     return selectedDateWorkOrders
       .filter(
         (workOrder) =>
           workOrder.assignedTechnicianId === technician.id ||
-          workOrder.assignedTechnicianName === technician.name
+          workOrder.assignedTechnicianName === technicianName
       )
       .sort(
         (a, b) =>
           getStartMinutes(a.timeWindow) -
           getStartMinutes(b.timeWindow)
       );
-    }    
+  }   
 
   return (
     <AppShell>
@@ -325,12 +393,12 @@ useEffect(() => {
               className="grid gap-4"
               style={{
                 gridTemplateColumns: `repeat(${Math.max(
-                  technicians.length,
+                  visibleTechnicians.length,
                   1
                 )}, minmax(280px, 1fr))`,
               }}
             >
-              {technicians.map((technician) => {
+              {visibleTechnicians.map((technician) => {
                 const technicianWorkOrders =
                   getWorkOrdersForTechnician(technician);
 
@@ -341,7 +409,7 @@ useEffect(() => {
                   >
                     <div className="mb-4 border-b border-zinc-800 pb-3">
                       <h2 className="font-semibold text-white">
-                        {technician.name || technician.email || "Technician"}
+                        {getTechnicianName(technician)}
                       </h2>
 
                       <p className="text-xs text-zinc-500">
@@ -433,7 +501,7 @@ useEffect(() => {
           </div>
         )}
 
-        {!isLoading && technicians.length === 0 && (
+        {!isLoading && visibleTechnicians.length === 0 && (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-6 text-zinc-400">
             No active technicians found.
           </div>

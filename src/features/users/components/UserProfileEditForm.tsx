@@ -56,6 +56,11 @@ export function UserProfileEditForm({
     selectedProfile.isActive
   );
 
+  const [technicianEnabled, setTechnicianEnabled] = useState<boolean>(
+    selectedProfile.role === "Technician" ||
+      selectedProfile.technicianEnabled
+  );
+
   const [projectIdsText, setProjectIdsText] =
     useState(
       selectedProfile.projectIds.join("\n")
@@ -124,6 +129,14 @@ export function UserProfileEditForm({
             ? {
                 role,
                 isActive,
+                technicianEnabled:
+                  role === "Technician"
+                    ? true
+                    : technicianEnabled,
+                technicianId:
+                  role === "Technician" || technicianEnabled
+                    ? selectedProfile.uid
+                    : "",
               }
             : {}),
 
@@ -296,6 +309,45 @@ export function UserProfileEditForm({
                   Inactive
                 </option>
               </select>
+            </div>
+            <div className="mt-6 border-t border-slate-800 pt-6">
+              <div className="flex items-start gap-3">
+                <input
+                  id="technicianEnabled"
+                  type="checkbox"
+                  checked={
+                    role === "Technician"
+                      ? true
+                      : technicianEnabled
+                  }
+                  disabled={role === "Technician"}
+                  onChange={(event) =>
+                    setTechnicianEnabled(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-950"
+                />
+
+                <div>
+                  <label
+                    htmlFor="technicianEnabled"
+                    className="text-sm font-medium text-white"
+                  >
+                    Field Work Access
+                  </label>
+
+                  <p className="mt-1 text-sm text-slate-400">
+                    Allow this user to receive technician assignments
+                    and access the technician portal.
+                  </p>
+
+                  {role === "Technician" ? (
+                    <p className="mt-2 text-xs text-cyan-400">
+                      Field Work Access is automatically enabled for
+                      users with the Technician role.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
         </section>

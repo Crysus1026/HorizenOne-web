@@ -32,7 +32,7 @@ function readString(value: unknown): string {
 
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
-    return [];
+    return []; 
   }
 
   return value.filter(
@@ -58,6 +58,10 @@ function normalizeUserProfile(
     isSystemAdmin:
       data.isSystemAdmin === true || role === "System Admin",
     projectIds: readStringArray(data.projectIds),
+    technicianEnabled:
+      role === "Technician" ||
+      data.technicianEnabled === true,
+    technicianId: readString(data.technicianId),
   };
 }
 

@@ -12,6 +12,8 @@ export type UpdateUserProfileInput = {
   companyId?: string;
   companyName?: string;
   isActive?: boolean;
+  technicianEnabled?: boolean;
+  technicianId?: string;
   projectIds: string[];
   updatedBy: string;
 };
@@ -48,6 +50,14 @@ export async function updateUserProfile(
 
   if (typeof input.isActive === "boolean") {
     updateData.isActive = input.isActive;
+  }
+
+  if (typeof input.technicianEnabled === "boolean") {
+    updateData.technicianEnabled = input.technicianEnabled;
+  }
+
+  if (typeof input.technicianId === "string") {
+    updateData.technicianId = input.technicianId;
   }
 
   await updateDoc(

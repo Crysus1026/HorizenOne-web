@@ -15,6 +15,8 @@ export type UserProfile = {
   companyName: string;
   isActive: boolean;
   isSystemAdmin: boolean;
+  technicianEnabled: boolean;
+  technicianId: string;
   projectIds: string[];
 };
 
@@ -68,6 +70,8 @@ export function useUserProfile() {
           projectIds: Array.isArray(userData.projectIds)
             ? userData.projectIds
             : [],
+            technicianEnabled: userData.technicianEnabled === true,
+            technicianId: userData.technicianId || "",
         };
 
         setProfile(loadedProfile);

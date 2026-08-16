@@ -55,6 +55,8 @@ type Technician = {
   projectIds?: string[];
   role?: string;
   isActive?: boolean;
+  technicianEnabled?: boolean;
+  technicianId?: string;
 };
 
 type TechnicianAvailability = {
@@ -153,7 +155,7 @@ export default function EditWorkOrderPage() {
   async function loadTechnicians(companyId: string) {
     const techniciansQuery = query(
       collection(db, "users"),
-      where("role", "==", "Technician"),
+      where("technicianEnabled", "==", true),
       where("isActive", "==", true),
       where("companyId", "==", companyId)
     );

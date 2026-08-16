@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -9,9 +8,10 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { db } from "@/lib/firebase";
 import TechnicianTopBar from "@/components/TechnicianTopBar";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { canPerformFieldWork } from "@/features/users/utils/userProfilePermissions";
 
 type WorkOrder = {
   id: string;
@@ -54,6 +54,12 @@ function getStartMinutes(timeWindow?: string) {
 }
 
 export default function TechnicianPage() {
+  const {
+    profile,
+    isLoadingProfile,
+    profileError,
+  } = useUserProfile();
+
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -61,64 +67,92 @@ export default function TechnicianPage() {
   const todayString = useMemo(() => formatDateInput(new Date()), []);
 
   useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-    try {
-      setIsLoading(true);
-      setError("");
+    if (isLoadingProfile) {
+      return;
+    }
 
-      if (!currentUser) {
-        setError("You must be logged in to view technician work orders.");
-        setWorkOrders([]);
-        return;
-      }
+    if (profileError) {
+      setError(profileError);
+      setWorkOrders([]);
+      setIsLoading(false);
+      return;
+    }
 
-      const workOrdersQuery = query(
-        collection(db, "workOrders"),
-        where("assignedTechnicianId", "==", currentUser.uid),
-        where("scheduledDate", "==", todayString)
-      );
+    if (!profile) {
+      setError("You must be logged in to view technician work orders.");
+      setWorkOrders([]);
+      setIsLoading(false);
+      return;
+    }
 
-      const snap = await getDocs(workOrdersQuery);
+    if (!canPerformFieldWork(profile)) {
+      setError("You do not have access to the technician portal.");
+      setWorkOrders([]);
+      setIsLoading(false);
+      return;
+    }
 
-      const data = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as WorkOrder[];
+    async function loadWorkOrders() {
+      try {
+        setIsLoading(true);
+        setError("");
 
-      const activeWorkOrders = data
-        .filter(
-          (workOrder) =>
-            workOrder.isActive !== false &&
-            workOrder.status !== "Closed"
-        )
-        .sort(
-          (a, b) =>
-            getStartMinutes(a.timeWindow) -
-            getStartMinutes(b.timeWindow)
+        const assignedTechnicianId =
+          profile.technicianId || profile.uid;
+
+        const workOrdersQuery = query(
+          collection(db, "workOrders"),
+          where("assignedTechnicianId", "==", assignedTechnicianId),
+          where("scheduledDate", "==", todayString)
         );
 
-      setWorkOrders(activeWorkOrders);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load technician work orders.");
-    } finally {
-      setIsLoading(false);
-    }
-  });
+        const snap = await getDocs(workOrdersQuery);
 
-  return () => unsubscribe();
-}, [todayString]);
+        const data = snap.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        })) as WorkOrder[];
+
+        const activeWorkOrders = data
+          .filter(
+            (workOrder) =>
+              workOrder.isActive !== false &&
+              workOrder.status !== "Closed"
+          )
+          .sort(
+            (a, b) =>
+              getStartMinutes(a.timeWindow) -
+              getStartMinutes(b.timeWindow)
+          );
+
+        setWorkOrders(activeWorkOrders);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load technician work orders.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadWorkOrders();
+  }, [
+    profile,
+    isLoadingProfile,
+    profileError,
+    todayString,
+  ]);
 
   return (
     <div className="min-h-screen bg-black text-white">
       <TechnicianTopBar
         title="Technician Portal"
         subtitle={todayString}
-    />
+      />
 
       <main className="p-4">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Today's Work Orders</h1>
+          <h1 className="text-2xl font-bold">Today&apos;s Work Orders</h1>
+
           <p className="text-sm text-zinc-400">
             {workOrders.length} assigned appointment
             {workOrders.length === 1 ? "" : "s"}
