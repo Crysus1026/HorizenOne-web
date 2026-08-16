@@ -85,7 +85,9 @@ export default function TechnicianPage() {
       return;
     }
 
-    if (!canPerformFieldWork(profile)) {
+    const currentProfile = profile;
+
+    if (!canPerformFieldWork(currentProfile)) {
       setError("You do not have access to the technician portal.");
       setWorkOrders([]);
       setIsLoading(false);
@@ -98,7 +100,7 @@ export default function TechnicianPage() {
         setError("");
 
         const assignedTechnicianId =
-          profile.technicianId || profile.uid;
+          currentProfile.technicianId || currentProfile.uid;
 
         const workOrdersQuery = query(
           collection(db, "workOrders"),
