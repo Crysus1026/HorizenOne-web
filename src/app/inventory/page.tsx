@@ -2,11 +2,11 @@
 
 import AppShell from "@/components/AppShell";
 import { getInventoryDashboard } from "@/features/inventory/services/inventoryDashboardService";
+import type { InventoryBalance } from "@/features/inventory/types/inventoryBalance";
 import type { InventoryItem } from "@/features/inventory/types/inventoryItem";
 import type { InventoryUnit } from "@/features/inventory/types/inventoryUnit";
 import {
   buildInventoryDashboardRows,
-  countUnitsByStatus,
   groupAssignedInventoryByTechnician,
 } from "@/features/inventory/utils/inventoryDashboard";
 import { getCompanyProjects } from "@/features/projects/services/projectService";
@@ -29,35 +29,71 @@ export default function InventoryPage() {
    */
   const companyId = profile?.companyId ?? "";
   const role = profile?.role ?? "";
-  const isSystemAdmin = profile?.isSystemAdmin === true;
+  const isSystemAdmin =
+    profile?.isSystemAdmin === true;
 
-  const assignedProjectIds = Array.isArray(profile?.projectIds)
-    ? profile.projectIds
-    : [];
+  const assignedProjectIds =
+    Array.isArray(profile?.projectIds)
+      ? profile.projectIds
+      : [];
 
-  const assignedProjectIdsKey = assignedProjectIds.join("|");
+  const assignedProjectIdsKey =
+    assignedProjectIds.join("|");
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [projects, setProjects] =
+    useState<Project[]>([]);
 
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [units, setUnits] = useState<InventoryUnit[]>([]);
+  const [
+    selectedProjectId,
+    setSelectedProjectId,
+  ] = useState("");
 
-  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
-  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+  const [items, setItems] =
+    useState<InventoryItem[]>([]);
 
-  const [pageError, setPageError] = useState("");
+  const [units, setUnits] =
+    useState<InventoryUnit[]>([]);
 
-  const [expandedTechnicians, setExpandedTechnicians] = useState<
-    Record<string, boolean>
-  >({});
+  const [balances, setBalances] =
+    useState<InventoryBalance[]>([]);
+
+  const [
+    isLoadingProjects,
+    setIsLoadingProjects,
+  ] = useState(false);
+
+  const [
+    isLoadingInventory,
+    setIsLoadingInventory,
+  ] = useState(false);
+
+  const [pageError, setPageError] =
+    useState("");
+
+  const [
+    expandedTechnicians,
+    setExpandedTechnicians,
+  ] = useState<Record<string, boolean>>(
+    {}
+  );
+
+  /*
+   * SELECTED PROGRAM
+   */
 
   const selectedProject = useMemo(() => {
     return (
-      projects.find((project) => project.id === selectedProjectId) ??
-      null
+      projects.find(
+        (project) =>
+          project.id ===
+          selectedProjectId
+      ) ?? null
     );
   }, [projects, selectedProjectId]);
+
+  /*
+   * LOAD AVAILABLE PROGRAMS
+   */
 
   useEffect(() => {
     let isCancelled = false;
@@ -73,6 +109,7 @@ export default function InventoryPage() {
           setSelectedProjectId("");
           setItems([]);
           setUnits([]);
+          setBalances([]);
           setIsLoadingProjects(false);
         }
 
@@ -83,43 +120,61 @@ export default function InventoryPage() {
       setPageError("");
 
       try {
-        const companyProjects = await getCompanyProjects(companyId);
+        const companyProjects =
+          await getCompanyProjects(
+            companyId
+          );
 
         if (isCancelled) {
           return;
         }
 
         const canAccessAllCompanyProjects =
-          role === "Admin" || isSystemAdmin;
+          role === "Admin" ||
+          isSystemAdmin;
 
-        const authorizedProjects = canAccessAllCompanyProjects
-          ? companyProjects
-          : companyProjects.filter((project) =>
-              assignedProjectIds.includes(project.id)
-            );
+        const authorizedProjects =
+          canAccessAllCompanyProjects
+            ? companyProjects
+            : companyProjects.filter(
+                (project) =>
+                  assignedProjectIds.includes(
+                    project.id
+                  )
+              );
 
-        const activeProjects = authorizedProjects.filter(
-          (project) => project.isActive !== false
-        );
+        const activeProjects =
+          authorizedProjects.filter(
+            (project) =>
+              project.isActive !== false
+          );
 
         setProjects(activeProjects);
 
-        setSelectedProjectId((currentProjectId) => {
-          const currentProjectStillAvailable =
-            activeProjects.some(
-              (project) => project.id === currentProjectId
-            );
+        setSelectedProjectId(
+          (currentProjectId) => {
+            const currentProjectStillAvailable =
+              activeProjects.some(
+                (project) =>
+                  project.id ===
+                  currentProjectId
+              );
 
-          if (currentProjectStillAvailable) {
-            return currentProjectId;
+            if (
+              currentProjectStillAvailable
+            ) {
+              return currentProjectId;
+            }
+
+            if (
+              activeProjects.length === 1
+            ) {
+              return activeProjects[0].id;
+            }
+
+            return "";
           }
-
-          if (activeProjects.length === 1) {
-            return activeProjects[0].id;
-          }
-
-          return "";
-        });
+        );
       } catch (error) {
         console.error(
           "Error loading inventory programs:",
@@ -131,7 +186,11 @@ export default function InventoryPage() {
           setSelectedProjectId("");
           setItems([]);
           setUnits([]);
-          setPageError("Unable to load available programs.");
+          setBalances([]);
+
+          setPageError(
+            "Unable to load available programs."
+          );
         }
       } finally {
         if (!isCancelled) {
@@ -153,6 +212,16 @@ export default function InventoryPage() {
     role,
   ]);
 
+  /*
+   * LOAD INVENTORY
+   *
+   * This now loads:
+   *
+   * - inventoryItems
+   * - serialized inventoryUnits
+   * - quantity inventoryBalances
+   */
+
   useEffect(() => {
     let isCancelled = false;
 
@@ -166,6 +235,7 @@ export default function InventoryPage() {
         if (!isCancelled) {
           setItems([]);
           setUnits([]);
+          setBalances([]);
           setIsLoadingInventory(false);
         }
 
@@ -176,23 +246,39 @@ export default function InventoryPage() {
       setPageError("");
 
       try {
-        const dashboardData = await getInventoryDashboard({
-          companyId,
-          projectId: selectedProjectId,
-        });
+        const dashboardData =
+          await getInventoryDashboard({
+            companyId,
+            projectId:
+              selectedProjectId,
+          });
 
         if (isCancelled) {
           return;
         }
 
-        setItems(dashboardData.items);
-        setUnits(dashboardData.units);
+        setItems(
+          dashboardData.items
+        );
+
+        setUnits(
+          dashboardData.units
+        );
+
+        setBalances(
+          dashboardData.balances
+        );
       } catch (error) {
-        console.error("Error loading inventory:", error);
+        console.error(
+          "Error loading inventory:",
+          error
+        );
 
         if (!isCancelled) {
           setItems([]);
           setUnits([]);
+          setBalances([]);
+
           setPageError(
             "Unable to load inventory for the selected program."
           );
@@ -216,45 +302,108 @@ export default function InventoryPage() {
     selectedProjectId,
   ]);
 
-  const inventoryRows = useMemo(() => {
-    return buildInventoryDashboardRows(items, units);
-  }, [items, units]);
+  /*
+   * BUILD ITEM ROWS
+   *
+   * Serialized inventory derives counts from inventoryUnits.
+   * Quantity inventory derives counts from inventoryBalances.
+   */
 
-  const assignedByTechnician = useMemo(() => {
-    return groupAssignedInventoryByTechnician(units);
-  }, [units]);
+  const inventoryRows =
+    useMemo(() => {
+      return buildInventoryDashboardRows(
+        items,
+        units,
+        balances
+      );
+    }, [items, units, balances]);
 
-  const totalAvailable = useMemo(() => {
-    return countUnitsByStatus(units, "available");
-  }, [units]);
+  /*
+   * SERIALIZED INVENTORY BY TECHNICIAN
+   *
+   * This section currently remains serialized-only.
+   */
 
-  const totalAssigned = useMemo(() => {
-    return countUnitsByStatus(units, "assigned");
-  }, [units]);
+  const assignedByTechnician =
+    useMemo(() => {
+      return groupAssignedInventoryByTechnician(
+        units
+      );
+    }, [units]);
 
-  const totalLowStock = useMemo(() => {
-    return inventoryRows.filter((item) => item.isLowStock)
-      .length;
-  }, [inventoryRows]);
+  /*
+   * DASHBOARD TOTALS
+   *
+   * These now use the combined inventory rows instead of
+   * counting serialized inventoryUnits directly.
+   *
+   * Therefore both serialized and quantity inventory are included.
+   */
 
-  function toggleTechnician(technicianName: string) {
-    setExpandedTechnicians((current) => ({
-      ...current,
-      [technicianName]: !current[technicianName],
-    }));
+  const totalAvailable =
+    useMemo(() => {
+      return inventoryRows.reduce(
+        (total, item) =>
+          total + item.available,
+        0
+      );
+    }, [inventoryRows]);
+
+  const totalAssigned =
+    useMemo(() => {
+      return inventoryRows.reduce(
+        (total, item) =>
+          total + item.assigned,
+        0
+      );
+    }, [inventoryRows]);
+
+  const totalLowStock =
+    useMemo(() => {
+      return inventoryRows.filter(
+        (item) =>
+          item.isLowStock
+      ).length;
+    }, [inventoryRows]);
+
+  /*
+   * HELPERS
+   */
+
+  function toggleTechnician(
+    technicianName: string
+  ) {
+    setExpandedTechnicians(
+      (current) => ({
+        ...current,
+
+        [technicianName]:
+          !current[technicianName],
+      })
+    );
   }
 
   function handleProjectChange(
     event: React.ChangeEvent<HTMLSelectElement>
   ) {
-    const nextProjectId = event.target.value;
+    const nextProjectId =
+      event.target.value;
 
-    setSelectedProjectId(nextProjectId);
+    setSelectedProjectId(
+      nextProjectId
+    );
+
     setItems([]);
     setUnits([]);
+    setBalances([]);
+
     setExpandedTechnicians({});
     setPageError("");
   }
+
+  /*
+   * PAGE STATES
+   */
 
   if (isLoadingProfile) {
     return (
@@ -266,12 +415,16 @@ export default function InventoryPage() {
     );
   }
 
-  if (profileError || !profile) {
+  if (
+    profileError ||
+    !profile
+  ) {
     return (
       <AppShell>
         <section className="rounded-xl border border-red-900/60 bg-red-950/30 p-5">
           <h1 className="text-xl font-semibold text-white">
-            Unable to Load Inventory
+            Unable to Load
+            Inventory
           </h1>
 
           <p className="mt-2 text-sm text-red-300">
@@ -288,11 +441,13 @@ export default function InventoryPage() {
       <AppShell>
         <section className="rounded-xl border border-amber-900/60 bg-amber-950/30 p-5">
           <h1 className="text-xl font-semibold text-white">
-            Company Assignment Required
+            Company Assignment
+            Required
           </h1>
 
           <p className="mt-2 text-sm text-amber-300">
-            Your user profile is not assigned to a company.
+            Your user profile is not
+            assigned to a company.
           </p>
         </section>
       </AppShell>
@@ -302,6 +457,8 @@ export default function InventoryPage() {
   return (
     <AppShell>
       <div className="space-y-6">
+        {/* HEADER */}
+
         <div>
           <h1 className="text-2xl font-semibold text-white">
             Inventory
@@ -314,6 +471,8 @@ export default function InventoryPage() {
           </p>
         </div>
 
+        {/* ERROR */}
+
         {pageError ? (
           <section className="rounded-xl border border-red-900/60 bg-red-950/30 p-4">
             <p className="text-sm text-red-300">
@@ -322,6 +481,8 @@ export default function InventoryPage() {
           </section>
         ) : null}
 
+        {/* PROGRAM SELECTOR */}
+
         <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
           <label className="block max-w-xl">
             <span className="text-sm font-medium text-slate-300">
@@ -329,9 +490,15 @@ export default function InventoryPage() {
             </span>
 
             <select
-              value={selectedProjectId}
-              onChange={handleProjectChange}
-              disabled={isLoadingProjects}
+              value={
+                selectedProjectId
+              }
+              onChange={
+                handleProjectChange
+              }
+              disabled={
+                isLoadingProjects
+              }
               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">
@@ -340,20 +507,29 @@ export default function InventoryPage() {
                   : "Select program"}
               </option>
 
-              {projects.map((project) => (
-                <option
-                  key={project.id}
-                  value={project.id}
-                >
-                  {project.name}
-                </option>
-              ))}
+              {projects.map(
+                (project) => (
+                  <option
+                    key={
+                      project.id
+                    }
+                    value={
+                      project.id
+                    }
+                  >
+                    {project.name}
+                  </option>
+                )
+              )}
             </select>
           </label>
 
-          {!isLoadingProjects && projects.length === 0 ? (
+          {!isLoadingProjects &&
+          projects.length === 0 ? (
             <p className="mt-3 text-sm text-amber-300">
-              No active programs are available for your account.
+              No active programs are
+              available for your
+              account.
             </p>
           ) : null}
         </section>
@@ -361,7 +537,8 @@ export default function InventoryPage() {
         {!selectedProjectId ? (
           <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
             <p className="text-sm text-slate-400">
-              Select a program to view its inventory.
+              Select a program to view
+              its inventory.
             </p>
           </section>
         ) : isLoadingInventory ? (
@@ -372,6 +549,8 @@ export default function InventoryPage() {
           </section>
         ) : (
           <>
+            {/* SUMMARY CARDS */}
+
             <section className="grid gap-4 md:grid-cols-4">
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
                 <p className="text-sm text-slate-400">
@@ -414,6 +593,8 @@ export default function InventoryPage() {
               </div>
             </section>
 
+            {/* INVENTORY ITEMS */}
+
             <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
               <div>
                 <h2 className="text-lg font-semibold text-white">
@@ -421,16 +602,19 @@ export default function InventoryPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-400">
-                  Item types are configured in Admin. This
-                  page shows inventory levels and status for
-                  the selected program.
+                  Serialized and
+                  quantity inventory
+                  levels for the
+                  selected program.
                 </p>
               </div>
 
-              {inventoryRows.length === 0 ? (
+              {inventoryRows.length ===
+              0 ? (
                 <p className="mt-4 text-sm text-slate-400">
-                  No inventory items have been created for
-                  this program.
+                  No inventory items
+                  have been created
+                  for this program.
                 </p>
               ) : (
                 <div className="mt-4 overflow-x-auto">
@@ -440,36 +624,51 @@ export default function InventoryPage() {
                         <th className="py-2 pr-4">
                           Item
                         </th>
+
+                        <th className="py-2 pr-4">
+                          Type
+                        </th>
+
                         <th className="py-2 pr-4">
                           Category
                         </th>
+
                         <th className="py-2 pr-4">
                           SKU
                         </th>
+
                         <th className="py-2 pr-4">
                           Available
                         </th>
+
                         <th className="py-2 pr-4">
                           Assigned
                         </th>
+
                         <th className="py-2 pr-4">
                           Installed
                         </th>
+
                         <th className="py-2 pr-4">
                           Damaged
                         </th>
+
                         <th className="py-2 pr-4">
                           Lost
                         </th>
+
                         <th className="py-2 pr-4">
                           Returned
                         </th>
+
                         <th className="py-2 pr-4">
                           Minimum
                         </th>
+
                         <th className="py-2 pr-4">
                           Status
                         </th>
+
                         <th className="py-2 pr-4">
                           Action
                         </th>
@@ -477,102 +676,154 @@ export default function InventoryPage() {
                     </thead>
 
                     <tbody>
-                      {inventoryRows.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="border-b border-slate-800 text-slate-200"
-                        >
-                          <td className="py-3 pr-4 font-medium text-white">
-                            {item.itemName}
-                          </td>
+                      {inventoryRows.map(
+                        (item) => (
+                          <tr
+                            key={
+                              item.id
+                            }
+                            className="border-b border-slate-800 text-slate-200"
+                          >
+                            <td className="py-3 pr-4 font-medium text-white">
+                              {
+                                item.itemName
+                              }
+                            </td>
 
-                          <td className="py-3 pr-4">
-                            {item.category}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.sku || "—"}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.available}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.assigned}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.installed}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.damaged}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.lost}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.returned}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.minimumStock || 0}
-                          </td>
-
-                          <td className="py-3 pr-4">
-                            {item.isLowStock ? (
-                              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300">
-                                Low Stock
+                            <td className="py-3 pr-4">
+                              <span className="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300">
+                                {item.trackingType ===
+                                "Quantity"
+                                  ? "Quantity"
+                                  : "Serialized"}
                               </span>
-                            ) : (
-                              <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-300">
-                                OK
-                              </span>
-                            )}
-                          </td>
+                            </td>
 
-                          <td className="py-3 pr-4">
-                            <Link
-                              href={`/inventory/${item.id}`}
-                              className="text-cyan-400 hover:text-cyan-300"
-                            >
-                              View
-                            </Link>
-                          </td>
-                        </tr>
-                      ))}
+                            <td className="py-3 pr-4">
+                              {
+                                item.category
+                              }
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {item.sku ||
+                                "—"}
+                            </td>
+
+                            <td className="py-3 pr-4 font-medium text-white">
+                              {
+                                item.available
+                              }
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {
+                                item.assigned
+                              }
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {item.trackingType ===
+                              "Quantity"
+                                ? "—"
+                                : item.installed}
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {item.trackingType ===
+                              "Quantity"
+                                ? "—"
+                                : item.damaged}
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {item.trackingType ===
+                              "Quantity"
+                                ? "—"
+                                : item.lost}
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {item.trackingType ===
+                              "Quantity"
+                                ? "—"
+                                : item.returned}
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {item.minimumStock ||
+                                0}
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              {item.isLowStock ? (
+                                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300">
+                                  Low Stock
+                                </span>
+                              ) : (
+                                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-300">
+                                  OK
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 pr-4">
+                              <Link
+                                href={`/inventory/${item.id}`}
+                                className="text-cyan-400 hover:text-cyan-300"
+                              >
+                                View
+                              </Link>
+                            </td>
+                          </tr>
+                        )
+                      )}
                     </tbody>
                   </table>
                 </div>
               )}
             </section>
 
+            {/* SERIALIZED ASSIGNED INVENTORY */}
+
             <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5">
               <h2 className="text-lg font-semibold text-white">
-                Assigned Inventory by Technician
+                Assigned Serialized
+                Inventory by Technician
               </h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                View serialized inventory currently assigned
-                to technicians.
+                View serialized
+                inventory currently
+                assigned to
+                technicians. Quantity
+                inventory assignments
+                are reflected in the
+                inventory table above.
               </p>
 
-              {Object.keys(assignedByTechnician).length ===
-              0 ? (
+              {Object.keys(
+                assignedByTechnician
+              ).length === 0 ? (
                 <p className="mt-4 text-sm text-slate-400">
-                  No inventory is currently assigned to
-                  technicians.
+                  No serialized
+                  inventory is
+                  currently assigned
+                  to technicians.
                 </p>
               ) : (
                 <div className="mt-4 space-y-3">
-                  {Object.entries(assignedByTechnician)
+                  {Object.entries(
+                    assignedByTechnician
+                  )
                     .sort(
                       (
-                        [technicianNameA],
-                        [technicianNameB]
+                        [
+                          technicianNameA,
+                        ],
+                        [
+                          technicianNameB,
+                        ]
                       ) =>
                         technicianNameA.localeCompare(
                           technicianNameB
@@ -590,7 +841,9 @@ export default function InventoryPage() {
 
                         return (
                           <div
-                            key={technicianName}
+                            key={
+                              technicianName
+                            }
                             className="overflow-hidden rounded-lg border border-slate-800 bg-black/40"
                           >
                             <button
@@ -600,18 +853,26 @@ export default function InventoryPage() {
                                   technicianName
                                 )
                               }
-                              aria-expanded={isExpanded}
+                              aria-expanded={
+                                isExpanded
+                              }
                               className="flex w-full items-center justify-between gap-4 p-4 text-left transition hover:bg-slate-900/60"
                             >
                               <div>
                                 <h3 className="font-semibold text-white">
-                                  {technicianName}
+                                  {
+                                    technicianName
+                                  }
                                 </h3>
 
                                 <p className="text-sm text-slate-500">
-                                  {technicianUnits.length}{" "}
-                                  assigned unit
-                                  {technicianUnits.length === 1
+                                  {
+                                    technicianUnits.length
+                                  }{" "}
+                                  assigned
+                                  unit
+                                  {technicianUnits.length ===
+                                  1
                                     ? ""
                                     : "s"}
                                 </p>
@@ -632,30 +893,42 @@ export default function InventoryPage() {
                               <div className="space-y-2 border-t border-slate-800 p-4">
                                 {technicianUnits
                                   .slice()
-                                  .sort((unitA, unitB) =>
+                                  .sort(
                                     (
-                                      unitA.itemName || ""
-                                    ).localeCompare(
-                                      unitB.itemName || ""
-                                    )
+                                      unitA,
+                                      unitB
+                                    ) =>
+                                      (
+                                        unitA.itemName ||
+                                        ""
+                                      ).localeCompare(
+                                        unitB.itemName ||
+                                          ""
+                                      )
                                   )
-                                  .map((unit) => (
-                                    <Link
-                                      key={unit.id}
-                                      href={`/inventory/units/${unit.id}`}
-                                      className="block rounded-md border border-slate-800 bg-slate-950 p-3 transition hover:border-cyan-500/50"
-                                    >
-                                      <p className="text-sm font-medium text-white">
-                                        {unit.itemName ||
-                                          "Inventory Item"}
-                                      </p>
+                                  .map(
+                                    (
+                                      unit
+                                    ) => (
+                                      <Link
+                                        key={
+                                          unit.id
+                                        }
+                                        href={`/inventory/units/${unit.id}`}
+                                        className="block rounded-md border border-slate-800 bg-slate-950 p-3 transition hover:border-cyan-500/50"
+                                      >
+                                        <p className="text-sm font-medium text-white">
+                                          {unit.itemName ||
+                                            "Inventory Item"}
+                                        </p>
 
-                                      <p className="mt-1 text-sm text-cyan-400">
-                                        {unit.serialNumber ||
-                                          "No serial number"}
-                                      </p>
-                                    </Link>
-                                  ))}
+                                        <p className="mt-1 text-sm text-cyan-400">
+                                          {unit.serialNumber ||
+                                            "No serial number"}
+                                        </p>
+                                      </Link>
+                                    )
+                                  )}
                               </div>
                             ) : null}
                           </div>

@@ -8,9 +8,16 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   where,
+  increment,
+  writeBatch,
 } from "firebase/firestore";
+
+import type {
+  InventoryBalance,
+} from "../types/inventoryBalance";
 
 import type {
   InventoryItem,
@@ -24,6 +31,7 @@ import type {
 export type InventoryItemDetailData = {
   item: InventoryItem | null;
   units: InventoryUnit[];
+  balances: InventoryBalance[];
   technicians: Technician[];
 };
 
@@ -53,6 +61,42 @@ export type UpdateSerializedUnitStatusInput = {
     | "lost"
     | "returned";
   notes?: string;
+};
+
+export type ReceiveQuantityInventoryInput = {
+  item: InventoryItem;
+  inventoryItemId: string;
+  quantity: number;
+  locationName: string;
+  notes?: string;
+};
+
+export type AssignQuantityInventoryInput = {
+  item: InventoryItem;
+  inventoryItemId: string;
+  technician: Technician;
+  technicianName: string;
+  quantity: number;
+  fromLocationName: string;
+  notes?: string;
+};
+
+export type ReturnQuantityInventoryInput = {
+  item: InventoryItem;
+  inventoryItemId: string;
+  technician: Technician;
+  technicianName: string;
+  quantity: number;
+  toLocationName: string;
+  notes?: string;
+};
+
+export type AdjustQuantityInventoryInput = {
+  item: InventoryItem;
+  inventoryItemId: string;
+  balance: InventoryBalance;
+  newQuantity: number;
+  notes: string;
 };
 
 function normalizeTrackingType(
@@ -110,6 +154,32 @@ function technicianBelongsToProject(
   return technician.projectIds.includes(projectId);
 }
 
+function normalizeBalanceKey(
+  value: string
+): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getWarehouseBalanceId(
+  inventoryItemId: string,
+  locationName: string
+): string {
+  return `${inventoryItemId}_warehouse_${normalizeBalanceKey(
+    locationName
+  )}`;
+}
+
+function getTechnicianBalanceId(
+  inventoryItemId: string,
+  technicianId: string
+): string {
+  return `${inventoryItemId}_technician_${technicianId}`;
+}
+
 export async function getInventoryItemDetail(
   inventoryItemId: string
 ): Promise<InventoryItemDetailData> {
@@ -117,6 +187,7 @@ export async function getInventoryItemDetail(
     return {
       item: null,
       units: [],
+      balances: [],
       technicians: [],
     };
   }
@@ -133,6 +204,7 @@ export async function getInventoryItemDetail(
     return {
       item: null,
       units: [],
+      balances: [],
       technicians: [],
     };
   }
@@ -200,11 +272,26 @@ export async function getInventoryItemDetail(
     where("inventoryItemId", "==", inventoryItemId)
   );
 
-  const [techniciansSnapshot, unitsSnapshot] =
-    await Promise.all([
-      getDocs(techniciansQuery),
-      getDocs(unitsQuery),
-    ]);
+  const balancesQuery = query(
+    collection(db, "inventoryBalances"),
+    where("companyId", "==", item.companyId),
+    where("projectId", "==", item.projectId),
+    where(
+      "inventoryItemId",
+      "==",
+      inventoryItemId
+    )
+  );
+
+  const [
+    techniciansSnapshot,
+    unitsSnapshot,
+    balancesSnapshot,
+  ] = await Promise.all([
+    getDocs(techniciansQuery),
+    getDocs(unitsQuery),
+    getDocs(balancesQuery),
+  ]);
 
   const technicians = techniciansSnapshot.docs
     .map((technicianDocument): Technician => {
@@ -307,9 +394,63 @@ export async function getInventoryItemDetail(
       )
     );
 
+    const balances =
+  balancesSnapshot.docs
+    .map(
+      (
+        balanceDocument
+      ): InventoryBalance => {
+        const data =
+          balanceDocument.data();
+
+        return {
+          id: balanceDocument.id,
+
+          companyId:
+            data.companyId ??
+            item.companyId,
+
+          projectId:
+            data.projectId ??
+            item.projectId,
+
+          inventoryItemId:
+            data.inventoryItemId ??
+            inventoryItemId,
+
+          locationType:
+            data.locationType ===
+            "technician"
+              ? "technician"
+              : "warehouse",
+
+          locationId:
+            data.locationId ?? "",
+
+          locationName:
+            data.locationName ?? "",
+
+          technicianId:
+            data.technicianId ?? "",
+
+          technicianName:
+            data.technicianName ?? "",
+
+          quantity:
+            Number(data.quantity) || 0,
+        };
+      }
+    )
+    .sort((balanceA, balanceB) =>
+      balanceA.locationName.localeCompare(
+        balanceB.locationName
+      )
+    );
+
   return {
     item,
     units,
+    balances,
     technicians,
   };
 }
@@ -451,62 +592,88 @@ export async function assignSerializedUnits({
   units,
   technician,
   technicianName,
-}: AssignSerializedUnitsInput): Promise<void> {
-  for (const unit of units) {
-    if (
-      unit.status !== "available" &&
-      unit.status !== "returned"
-    ) {
-      continue;
-    }
+}: AssignSerializedUnitsInput): Promise<number> {
+  const eligibleUnits = units.filter(
+    (unit) =>
+      unit.status === "available" ||
+      unit.status === "returned"
+  );
 
-    await updateDoc(
-      doc(db, "inventoryUnits", unit.id),
-      {
-        status: "assigned",
-        assignedTechnicianId: technician.id,
-        assignedTechnicianName: technicianName,
-        locationName: "",
-        updatedAt: serverTimestamp(),
-      }
-    );
-
-    await addDoc(
-      collection(db, "inventoryTransactions"),
-      {
-        companyId: item.companyId,
-        companyName: item.companyName ?? "",
-
-        projectId: item.projectId,
-        projectName: item.projectName ?? "",
-
-        inventoryItemId,
-        inventoryUnitId: unit.id,
-
-        itemName: item.itemName,
-        serialNumber: unit.serialNumber,
-
-        type: "assigned_to_tech",
-        quantity: 1,
-
-        fromLocationName:
-          unit.locationName ?? "",
-
-        toTechnicianId: technician.id,
-        toTechnicianName: technicianName,
-
-        unitValueCents:
-          item.standardUnitValueCents ?? 0,
-
-        totalValueCents:
-          item.standardUnitValueCents ?? 0,
-
-        notes: "Bulk assigned to technician",
-
-        createdAt: serverTimestamp(),
-      }
+  if (eligibleUnits.length === 0) {
+    throw new Error(
+      "No eligible inventory units were selected."
     );
   }
+
+  const batch = writeBatch(db);
+
+  for (const unit of eligibleUnits) {
+    const unitReference = doc(
+      db,
+      "inventoryUnits",
+      unit.id
+    );
+
+    batch.update(unitReference, {
+      status: "assigned",
+      assignedTechnicianId: technician.id,
+      assignedTechnicianName:
+        technicianName,
+      locationName: "",
+      updatedAt: serverTimestamp(),
+    });
+
+    const transactionReference = doc(
+      collection(
+        db,
+        "inventoryTransactions"
+      )
+    );
+
+    batch.set(transactionReference, {
+      companyId: item.companyId,
+      companyName:
+        item.companyName ?? "",
+
+      projectId: item.projectId,
+      projectName:
+        item.projectName ?? "",
+
+      inventoryItemId,
+      inventoryUnitId: unit.id,
+
+      itemName: item.itemName,
+      serialNumber: unit.serialNumber,
+
+      type: "assigned_to_tech",
+      quantity: 1,
+
+      fromLocationName:
+        unit.locationName ?? "",
+
+      toTechnicianId:
+        technician.id,
+
+      toTechnicianName:
+        technicianName,
+
+      unitValueCents:
+        item.standardUnitValueCents ?? 0,
+
+      totalValueCents:
+        item.standardUnitValueCents ?? 0,
+
+      notes:
+        "Bulk assigned to technician",
+
+      createdAt:
+        serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
+
+  return eligibleUnits.length;
 }
 
 export async function updateSerializedUnitStatus({
@@ -590,6 +757,725 @@ export async function updateSerializedUnitStatus({
             : `Marked ${newStatus} from item detail page`),
 
       createdAt: serverTimestamp(),
+    }
+  );
+}
+
+export async function receiveQuantityInventory({
+  item,
+  inventoryItemId,
+  quantity,
+  locationName,
+  notes,
+}: ReceiveQuantityInventoryInput): Promise<void> {
+  if (!inventoryItemId) {
+    throw new Error(
+      "Inventory item ID is required."
+    );
+  }
+
+  if (!item.companyId) {
+    throw new Error(
+      "Inventory item company is required."
+    );
+  }
+
+  if (!item.projectId) {
+    throw new Error(
+      "Inventory item program is required."
+    );
+  }
+
+  if (item.trackingType !== "Quantity") {
+    throw new Error(
+      "Quantity receiving is only available for quantity inventory items."
+    );
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new Error(
+      "Quantity must be greater than zero."
+    );
+  }
+
+  const normalizedQuantity =
+    Math.floor(quantity);
+
+  const normalizedLocationName =
+    locationName.trim();
+
+  if (!normalizedLocationName) {
+    throw new Error(
+      "Location is required."
+    );
+  }
+
+  const balanceReference = doc(
+    db,
+    "inventoryBalances",
+    getWarehouseBalanceId(
+      inventoryItemId,
+      normalizedLocationName
+    )
+  );
+
+  const transactionReference = doc(
+    collection(
+      db,
+      "inventoryTransactions"
+    )
+  );
+
+  const batch = writeBatch(db);
+
+  batch.set(
+    balanceReference,
+    {
+      companyId: item.companyId,
+      companyName:
+        item.companyName ?? "",
+
+      projectId: item.projectId,
+      projectName:
+        item.projectName ?? "",
+
+      inventoryItemId,
+
+      locationType: "warehouse",
+      locationId: "",
+
+      locationName:
+        normalizedLocationName,
+
+      technicianId: "",
+      technicianName: "",
+
+      quantity:
+        increment(
+          normalizedQuantity
+        ),
+
+      updatedAt:
+        serverTimestamp(),
+    },
+    {
+      merge: true,
+    }
+  );
+
+  batch.set(
+    transactionReference,
+    {
+      companyId:
+        item.companyId,
+
+      companyName:
+        item.companyName ?? "",
+
+      projectId:
+        item.projectId,
+
+      projectName:
+        item.projectName ?? "",
+
+      inventoryItemId,
+
+      itemName:
+        item.itemName,
+
+      type: "received",
+
+      quantity:
+        normalizedQuantity,
+
+      fromLocationName: "",
+
+      toLocationName:
+        normalizedLocationName,
+
+      unitValueCents:
+        item.standardUnitValueCents ??
+        0,
+
+      totalValueCents:
+        normalizedQuantity *
+        (item.standardUnitValueCents ??
+          0),
+
+      notes:
+        notes?.trim() ?? "",
+
+      createdAt:
+        serverTimestamp(),
+    }
+  );
+
+  await batch.commit();
+}
+
+export async function assignQuantityInventory({
+  item,
+  inventoryItemId,
+  technician,
+  technicianName,
+  quantity,
+  fromLocationName,
+  notes,
+}: AssignQuantityInventoryInput): Promise<void> {
+  if (item.trackingType !== "Quantity") {
+    throw new Error(
+      "Quantity assignment is only available for quantity inventory items."
+    );
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new Error(
+      "Quantity must be greater than zero."
+    );
+  }
+
+  const normalizedQuantity =
+    Math.floor(quantity);
+
+  const normalizedLocationName =
+    fromLocationName.trim();
+
+  if (!normalizedLocationName) {
+    throw new Error(
+      "Source location is required."
+    );
+  }
+
+  const warehouseReference = doc(
+    db,
+    "inventoryBalances",
+    getWarehouseBalanceId(
+      inventoryItemId,
+      normalizedLocationName
+    )
+  );
+
+  const technicianReference = doc(
+    db,
+    "inventoryBalances",
+    getTechnicianBalanceId(
+      inventoryItemId,
+      technician.id
+    )
+  );
+
+  const inventoryTransactionReference =
+    doc(
+      collection(
+        db,
+        "inventoryTransactions"
+      )
+    );
+
+  await runTransaction(
+    db,
+    async (transaction) => {
+      const warehouseSnapshot =
+        await transaction.get(
+          warehouseReference
+        );
+
+      if (!warehouseSnapshot.exists()) {
+        throw new Error(
+          "Source inventory balance was not found."
+        );
+      }
+
+      const warehouseQuantity =
+        Number(
+          warehouseSnapshot.data()
+            .quantity
+        ) || 0;
+
+      if (
+        warehouseQuantity <
+        normalizedQuantity
+      ) {
+        throw new Error(
+          `Insufficient inventory. ${warehouseQuantity} available.`
+        );
+      }
+
+      transaction.update(
+        warehouseReference,
+        {
+          quantity:
+            warehouseQuantity -
+            normalizedQuantity,
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+      transaction.set(
+        technicianReference,
+        {
+          companyId:
+            item.companyId,
+
+          companyName:
+            item.companyName ?? "",
+
+          projectId:
+            item.projectId,
+
+          projectName:
+            item.projectName ?? "",
+
+          inventoryItemId,
+
+          locationType:
+            "technician",
+
+          locationId:
+            technician.id,
+
+          locationName:
+            technicianName,
+
+          technicianId:
+            technician.id,
+
+          technicianName,
+
+          quantity:
+            increment(
+              normalizedQuantity
+            ),
+
+          updatedAt:
+            serverTimestamp(),
+        },
+        {
+          merge: true,
+        }
+      );
+
+      transaction.set(
+        inventoryTransactionReference,
+        {
+          companyId:
+            item.companyId,
+
+          companyName:
+            item.companyName ?? "",
+
+          projectId:
+            item.projectId,
+
+          projectName:
+            item.projectName ?? "",
+
+          inventoryItemId,
+
+          itemName:
+            item.itemName,
+
+          type:
+            "assigned_to_tech",
+
+          quantity:
+            normalizedQuantity,
+
+          fromLocationName:
+            normalizedLocationName,
+
+          toTechnicianId:
+            technician.id,
+
+          toTechnicianName:
+            technicianName,
+
+          unitValueCents:
+            item.standardUnitValueCents ??
+            0,
+
+          totalValueCents:
+            normalizedQuantity *
+            (item.standardUnitValueCents ??
+              0),
+
+          notes:
+            notes?.trim() ||
+            "Quantity inventory assigned to technician",
+
+          createdAt:
+            serverTimestamp(),
+        }
+      );
+    }
+  );
+}
+
+export async function returnQuantityInventory({
+  item,
+  inventoryItemId,
+  technician,
+  technicianName,
+  quantity,
+  toLocationName,
+  notes,
+}: ReturnQuantityInventoryInput): Promise<void> {
+  if (item.trackingType !== "Quantity") {
+    throw new Error(
+      "Quantity returns are only available for quantity inventory items."
+    );
+  }
+
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new Error(
+      "Quantity must be greater than zero."
+    );
+  }
+
+  const normalizedQuantity =
+    Math.floor(quantity);
+
+  const normalizedLocationName =
+    toLocationName.trim();
+
+  if (!normalizedLocationName) {
+    throw new Error(
+      "Destination location is required."
+    );
+  }
+
+  const technicianReference = doc(
+    db,
+    "inventoryBalances",
+    getTechnicianBalanceId(
+      inventoryItemId,
+      technician.id
+    )
+  );
+
+  const warehouseReference = doc(
+    db,
+    "inventoryBalances",
+    getWarehouseBalanceId(
+      inventoryItemId,
+      normalizedLocationName
+    )
+  );
+
+  const inventoryTransactionReference =
+    doc(
+      collection(
+        db,
+        "inventoryTransactions"
+      )
+    );
+
+  await runTransaction(
+    db,
+    async (transaction) => {
+      const technicianSnapshot =
+        await transaction.get(
+          technicianReference
+        );
+
+      if (!technicianSnapshot.exists()) {
+        throw new Error(
+          "Technician inventory balance was not found."
+        );
+      }
+
+      const technicianQuantity =
+        Number(
+          technicianSnapshot.data()
+            .quantity
+        ) || 0;
+
+      if (
+        technicianQuantity <
+        normalizedQuantity
+      ) {
+        throw new Error(
+          `Technician only has ${technicianQuantity} available.`
+        );
+      }
+
+      const warehouseSnapshot =
+        await transaction.get(
+          warehouseReference
+        );
+
+      const warehouseQuantity =
+        warehouseSnapshot.exists()
+          ? Number(
+              warehouseSnapshot.data()
+                .quantity
+            ) || 0
+          : 0;
+
+      transaction.update(
+        technicianReference,
+        {
+          quantity:
+            technicianQuantity -
+            normalizedQuantity,
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+      transaction.set(
+        warehouseReference,
+        {
+          companyId:
+            item.companyId,
+
+          companyName:
+            item.companyName ?? "",
+
+          projectId:
+            item.projectId,
+
+          projectName:
+            item.projectName ?? "",
+
+          inventoryItemId,
+
+          locationType: "warehouse",
+
+          locationId: "",
+
+          locationName:
+            normalizedLocationName,
+
+          technicianId: "",
+          technicianName: "",
+
+          quantity:
+            warehouseQuantity +
+            normalizedQuantity,
+
+          updatedAt:
+            serverTimestamp(),
+
+          ...(warehouseSnapshot.exists()
+            ? {}
+            : {
+                createdAt:
+                  serverTimestamp(),
+              }),
+        },
+        {
+          merge: true,
+        }
+      );
+
+      transaction.set(
+        inventoryTransactionReference,
+        {
+          companyId:
+            item.companyId,
+
+          companyName:
+            item.companyName ?? "",
+
+          projectId:
+            item.projectId,
+
+          projectName:
+            item.projectName ?? "",
+
+          inventoryItemId,
+
+          itemName:
+            item.itemName,
+
+          type: "returned",
+
+          quantity:
+            normalizedQuantity,
+
+          fromTechnicianId:
+            technician.id,
+
+          fromTechnicianName:
+            technicianName,
+
+          toLocationName:
+            normalizedLocationName,
+
+          unitValueCents:
+            item.standardUnitValueCents ??
+            0,
+
+          totalValueCents:
+            normalizedQuantity *
+            (item.standardUnitValueCents ??
+              0),
+
+          notes:
+            notes?.trim() ||
+            "Quantity inventory returned to warehouse",
+
+          createdAt:
+            serverTimestamp(),
+        }
+      );
+    }
+  );
+}
+
+export async function adjustQuantityInventory({
+  item,
+  inventoryItemId,
+  balance,
+  newQuantity,
+  notes,
+}: AdjustQuantityInventoryInput): Promise<void> {
+  if (item.trackingType !== "Quantity") {
+    throw new Error(
+      "Quantity adjustments are only available for quantity inventory items."
+    );
+  }
+
+  if (
+    !Number.isFinite(newQuantity) ||
+    newQuantity < 0
+  ) {
+    throw new Error(
+      "Adjusted quantity must be zero or greater."
+    );
+  }
+
+  const normalizedQuantity =
+    Math.floor(newQuantity);
+
+  const normalizedNotes =
+    notes.trim();
+
+  if (!normalizedNotes) {
+    throw new Error(
+      "Adjustment notes are required."
+    );
+  }
+
+  const balanceReference = doc(
+    db,
+    "inventoryBalances",
+    balance.id
+  );
+
+  const transactionReference = doc(
+    collection(
+      db,
+      "inventoryTransactions"
+    )
+  );
+
+  await runTransaction(
+    db,
+    async (transaction) => {
+      const balanceSnapshot =
+        await transaction.get(
+          balanceReference
+        );
+
+      if (!balanceSnapshot.exists()) {
+        throw new Error(
+          "Inventory balance was not found."
+        );
+      }
+
+      const oldQuantity =
+        Number(
+          balanceSnapshot.data()
+            .quantity
+        ) || 0;
+
+      const adjustment =
+        normalizedQuantity -
+        oldQuantity;
+
+      transaction.update(
+        balanceReference,
+        {
+          quantity:
+            normalizedQuantity,
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+      transaction.set(
+        transactionReference,
+        {
+          companyId:
+            item.companyId,
+
+          companyName:
+            item.companyName ?? "",
+
+          projectId:
+            item.projectId,
+
+          projectName:
+            item.projectName ?? "",
+
+          inventoryItemId,
+
+          itemName:
+            item.itemName,
+
+          type: "adjustment",
+
+          quantity:
+            adjustment,
+
+          previousQuantity:
+            oldQuantity,
+
+          newQuantity:
+            normalizedQuantity,
+
+          locationName:
+            balance.locationName,
+
+          technicianId:
+            balance.technicianId ??
+            "",
+
+          technicianName:
+            balance.technicianName ??
+            "",
+
+          unitValueCents:
+            item.standardUnitValueCents ??
+            0,
+
+          totalValueCents:
+            Math.abs(adjustment) *
+            (item.standardUnitValueCents ??
+              0),
+
+          notes:
+            normalizedNotes,
+
+          createdAt:
+            serverTimestamp(),
+        }
+      );
     }
   );
 }
