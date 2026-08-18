@@ -1,19 +1,35 @@
 export const SCHEDULING_WINDOWS = [
   {
-    id: "8-10",
-    label: "8:00 AM - 10:00 AM",
+    id: "08:00-09:00",
+    label: "8:00 AM - 9:00 AM",
   },
   {
-    id: "10-12",
-    label: "10:00 AM - 12:00 PM",
+    id: "09:00-10:00",
+    label: "9:00 AM - 10:00 AM",
   },
   {
-    id: "12-2",
-    label: "12:00 PM - 2:00 PM",
+    id: "10:00-11:00",
+    label: "10:00 AM - 11:00 AM",
   },
   {
-    id: "2-4",
-    label: "2:00 PM - 4:00 PM",
+    id: "11:00-12:00",
+    label: "11:00 AM - 12:00 PM",
+  },
+  {
+    id: "12:00-13:00",
+    label: "12:00 PM - 1:00 PM",
+  },
+  {
+    id: "13:00-14:00",
+    label: "1:00 PM - 2:00 PM",
+  },
+  {
+    id: "14:00-15:00",
+    label: "2:00 PM - 3:00 PM",
+  },
+  {
+    id: "15:00-16:00",
+    label: "3:00 PM - 4:00 PM",
   },
 ] as const;
 
@@ -69,12 +85,15 @@ export const EMPTY_WEEKLY_SCHEDULE: TechnicianWeeklySchedule = {
   sunday: [],
 };
 
+const DEFAULT_WEEKDAY_WINDOWS: SchedulingWindowId[] =
+  SCHEDULING_WINDOWS.map((window) => window.id);
+
 export const DEFAULT_WEEKDAY_SCHEDULE: TechnicianWeeklySchedule = {
-  monday: ["8-10", "10-12", "12-2", "2-4"],
-  tuesday: ["8-10", "10-12", "12-2", "2-4"],
-  wednesday: ["8-10", "10-12", "12-2", "2-4"],
-  thursday: ["8-10", "10-12", "12-2", "2-4"],
-  friday: ["8-10", "10-12", "12-2", "2-4"],
+  monday: [...DEFAULT_WEEKDAY_WINDOWS],
+  tuesday: [...DEFAULT_WEEKDAY_WINDOWS],
+  wednesday: [...DEFAULT_WEEKDAY_WINDOWS],
+  thursday: [...DEFAULT_WEEKDAY_WINDOWS],
+  friday: [...DEFAULT_WEEKDAY_WINDOWS],
   saturday: [],
   sunday: [],
 };

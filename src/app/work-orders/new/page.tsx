@@ -17,7 +17,12 @@ import { Suspense, useEffect, useState } from "react";
 import {
   getSchedulingWindowId,
   getWeekdayFromDate,
+  normalizeSchedulingWindowIds,
 } from "@/lib/scheduling";
+
+import {
+  SCHEDULING_WINDOWS,
+} from "@/types/technicianAvailability";
 import { useUserProfile } from "@/hooks/useUserProfile";
 
 type Customer = {
@@ -107,13 +112,6 @@ const BLOCKING_WORK_ORDER_STATUSES = [
   "Completed",
   "Verified",
 ];
-
-const TIME_WINDOWS = [
-  "8:00 AM - 10:00 AM",
-  "10:00 AM - 12:00 PM",
-  "12:00 PM - 2:00 PM",
-  "2:00 PM - 4:00 PM",
-] as const;
 
 function NewWorkOrderPageContent() {
   const router = useRouter();
@@ -487,8 +485,9 @@ function NewWorkOrderPageContent() {
             return;
           }
 
-          const scheduledWindows =
-            availability.weeklySchedule?.[weekday] ?? [];
+          const scheduledWindows = normalizeSchedulingWindowIds(
+            availability.weeklySchedule?.[weekday] ?? []
+          );
 
           if (
             scheduledWindows.includes(schedulingWindowId)
@@ -671,16 +670,16 @@ const availableTechnicianExists =
     setIsCheckingAvailability(true);
 
     const results = await Promise.all(
-      TIME_WINDOWS.map(async (window) => {
+      SCHEDULING_WINDOWS.map(async (window) => {
         const isAvailable =
           await checkTechnicianAvailability(
             selectedProjectId,
             selectedDate,
-            window,
+            window.label,
             false
           );
 
-        return [window, isAvailable] as const;
+        return [window.label, isAvailable] as const;
       })
     );
 
@@ -1051,20 +1050,20 @@ const availableTechnicianExists =
                     : "Select time window"}
                 </option>
 
-                {TIME_WINDOWS.map((window) => {
+                {SCHEDULING_WINDOWS.map((window) => {
                   const availability =
-                    timeWindowAvailability[window];
+                    timeWindowAvailability[window.label];
 
                   const isUnavailable =
                     availability === false;
 
                   return (
                     <option
-                      key={window}
-                      value={window}
+                      key={window.id}
+                      value={window.label}
                       disabled={isUnavailable}
                     >
-                      {window}
+                      {window.label}
                       {isUnavailable
                         ? " — No availability"
                         : availability === true

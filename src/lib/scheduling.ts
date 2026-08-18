@@ -1,22 +1,64 @@
-import type {
-  SchedulingWindowId,
-  Weekday,
+import {
+  SCHEDULING_WINDOWS,
+  type SchedulingWindowId,
+  type Weekday,
 } from "@/types/technicianAvailability";
+
+const LEGACY_SCHEDULING_WINDOWS: Record<
+  string,
+  SchedulingWindowId[]
+> = {
+  "8-10": ["08:00-09:00", "09:00-10:00"],
+  "10-12": ["10:00-11:00", "11:00-12:00"],
+  "12-2": ["12:00-13:00", "13:00-14:00"],
+  "2-4": ["14:00-15:00", "15:00-16:00"],
+};
 
 export function getSchedulingWindowId(
   timeWindow: string
 ): SchedulingWindowId | null {
-  const windowMap: Record<string, SchedulingWindowId> = {
-    "8:00 AM - 10:00 AM": "8-10",
-    "10:00 AM - 12:00 PM": "10-12",
-    "12:00 PM - 2:00 PM": "12-2",
-    "2:00 PM - 4:00 PM": "2-4",
-  };
+  const matchingWindow = SCHEDULING_WINDOWS.find(
+    (window) => window.label === timeWindow
+  );
 
-  return windowMap[timeWindow] ?? null;
+  return matchingWindow?.id ?? null;
 }
 
-export function getWeekdayFromDate(dateString: string): Weekday | null {
+export function normalizeSchedulingWindowIds(
+  windowIds: string[]
+): SchedulingWindowId[] {
+  const normalizedWindowIds =
+    new Set<SchedulingWindowId>();
+
+  for (const windowId of windowIds) {
+    const legacyWindowIds =
+      LEGACY_SCHEDULING_WINDOWS[windowId];
+
+    if (legacyWindowIds) {
+      for (const legacyWindowId of legacyWindowIds) {
+        normalizedWindowIds.add(legacyWindowId);
+      }
+
+      continue;
+    }
+
+    const isCurrentWindowId = SCHEDULING_WINDOWS.some(
+      (window) => window.id === windowId
+    );
+
+    if (isCurrentWindowId) {
+      normalizedWindowIds.add(
+        windowId as SchedulingWindowId
+      );
+    }
+  }
+
+  return Array.from(normalizedWindowIds);
+}
+
+export function getWeekdayFromDate(
+  dateString: string
+): Weekday | null {
   if (!dateString) {
     return null;
   }

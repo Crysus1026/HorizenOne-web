@@ -16,13 +16,6 @@ import jsPDF from "jspdf";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const timeWindows = [
-  "8:00 AM - 10:00 AM",
-  "10:00 AM - 12:00 PM",
-  "12:00 PM - 2:00 PM",
-  "2:00 PM - 4:00 PM",
-];
-
 type WorkOrder = {
   id: string;
   customerName?: string;
@@ -31,11 +24,6 @@ type WorkOrder = {
   serviceTypeName?: string;
   scheduledDate?: string;
   timeWindow?: string;
-  companyId?: string;
-  projectId?: string;
-  projectName?: string;
-  assignedTechnicianId?: string;
-  assignedTechnicianName?: string;
   status?: string;
 
   customerScheduleTokenUsed?: boolean;
@@ -72,7 +60,7 @@ function formatTimestamp(value?: Timestamp | Date) {
 
 function formatInstallationDate(value?: string) {
   if (!value) {
-    return "Not selected";
+    return "Not scheduled";
   }
 
   const [year, month, day] = value.split("-").map(Number);
@@ -89,17 +77,10 @@ function formatInstallationDate(value?: string) {
 }
 
 export default function CustomerSchedulePage() {
-  const params = useParams();
-  const token = params.token as string;
+  const params = useParams<{ token: string }>();
+  const token = params.token;
 
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
-
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedWindow, setSelectedWindow] = useState("");
-
-  const [availableWindows, setAvailableWindows] = useState<string[]>([]);
-  const [isLoadingAvailability, setIsLoadingAvailability] =
-    useState(false);
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedWaiver, setAcceptedWaiver] = useState(false);
@@ -111,123 +92,55 @@ export default function CustomerSchedulePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const scheduledDate = workOrder?.scheduledDate ?? "";
+  const timeWindow = workOrder?.timeWindow ?? "";
+
   useEffect(() => {
-  async function loadWorkOrder() {
-    try {
-      const workOrderQuery = query(
-        collection(db, "workOrders"),
-        where("customerScheduleToken", "==", token)
-      );
+    async function loadWorkOrder() {
+      try {
+        setIsLoading(true);
+        setError("");
 
-      const snapshot = await getDocs(workOrderQuery);
+        const workOrderQuery = query(
+          collection(db, "workOrders"),
+          where("customerScheduleToken", "==", token)
+        );
 
-      if (snapshot.empty) {
-        setError("This customer confirmation link is invalid.");
-        return;
+        const snapshot = await getDocs(workOrderQuery);
+
+        if (snapshot.empty) {
+          setError("This customer confirmation link is invalid.");
+          return;
+        }
+
+        const documentSnapshot = snapshot.docs[0];
+        const data = documentSnapshot.data();
+
+        setWorkOrder({
+          id: documentSnapshot.id,
+          ...data,
+        } as WorkOrder);
+      } catch (loadError) {
+        console.error(
+          "Unable to load customer confirmation:",
+          loadError
+        );
+
+        setError(
+          "Unable to load the customer confirmation page."
+        );
+      } finally {
+        setIsLoading(false);
       }
+    }
 
-      const documentSnapshot = snapshot.docs[0];
-      const data = documentSnapshot.data();
-
-      setWorkOrder({
-        id: documentSnapshot.id,
-        ...data,
-      } as WorkOrder);
-
-      setSelectedDate(data.scheduledDate || "");
-      setSelectedWindow(data.timeWindow || "");
-    } catch (loadError) {
-      console.error(
-        "Unable to load customer confirmation:",
-        loadError
-      );
-
-      setError(
-        "Unable to load the customer confirmation page."
-      );
-    } finally {
+    if (token) {
+      loadWorkOrder();
+    } else {
+      setError("This customer confirmation link is invalid.");
       setIsLoading(false);
     }
-  }
-
-  if (token) {
-    loadWorkOrder();
-  }
-}, [token]);
-
-useEffect(() => {
-  async function loadAvailability() {
-    if (
-      !token ||
-      !selectedDate ||
-      workOrder?.customerScheduleTokenUsed
-    ) {
-      setAvailableWindows([]);
-      return;
-    }
-
-    try {
-      setIsLoadingAvailability(true);
-      setError("");
-
-      const response = await fetch(
-        `/api/customer-schedule/availability?token=${encodeURIComponent(
-          token
-        )}&date=${encodeURIComponent(selectedDate)}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          result.error ||
-            "Unable to load available time windows."
-        );
-      }
-
-      const loadedWindows = Array.isArray(
-        result.availableWindows
-      )
-        ? result.availableWindows
-        : [];
-
-      setAvailableWindows(loadedWindows);
-
-      if (
-        selectedWindow &&
-        !loadedWindows.includes(selectedWindow)
-      ) {
-        setSelectedWindow("");
-      }
-    } catch (availabilityError) {
-      console.error(
-        "Unable to load scheduling availability:",
-        availabilityError
-      );
-
-      setAvailableWindows([]);
-
-      setError(
-        availabilityError instanceof Error
-          ? availabilityError.message
-          : "Unable to load available time windows."
-      );
-    } finally {
-      setIsLoadingAvailability(false);
-    }
-  }
-
-  loadAvailability();
-}, [
-  token,
-  selectedDate,
-  selectedWindow,
-  workOrder?.customerScheduleTokenUsed,
-]);
+  }, [token]);
 
   async function generateAndUploadReceipt(): Promise<ReceiptResult> {
     if (!workOrder) {
@@ -248,7 +161,11 @@ useEffect(() => {
     pdf.text("Customer Confirmation Receipt", 20, 20);
 
     pdf.setFontSize(11);
-    pdf.text(`Confirmation Number: ${confirmationNumber}`, 20, 35);
+    pdf.text(
+      `Confirmation Number: ${confirmationNumber}`,
+      20,
+      35
+    );
     pdf.text(
       `Customer: ${workOrder.customerName || "Not provided"}`,
       20,
@@ -261,11 +178,15 @@ useEffect(() => {
       65
     );
     pdf.text(
-      `Installation Date: ${formatInstallationDate(selectedDate)}`,
+      `Installation Date: ${formatInstallationDate(scheduledDate)}`,
       20,
       75
     );
-    pdf.text(`Time Window: ${selectedWindow}`, 20, 85);
+    pdf.text(
+      `Time Window: ${timeWindow || "Not scheduled"}`,
+      20,
+      85
+    );
 
     pdf.setFontSize(13);
     pdf.text("Customer Acknowledgments", 20, 105);
@@ -290,7 +211,11 @@ useEffect(() => {
       20,
       195
     );
-    pdf.text("Waiver: /documents/waiver.pdf", 20, 205);
+    pdf.text(
+      "Waiver: /documents/waiver.pdf",
+      20,
+      205
+    );
 
     const pdfBlob = pdf.output("blob");
 
@@ -312,7 +237,7 @@ useEffect(() => {
     };
   }
 
-  async function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!workOrder) {
@@ -320,7 +245,16 @@ useEffect(() => {
     }
 
     if (workOrder.customerScheduleTokenUsed) {
-      setError("This customer confirmation has already been completed.");
+      setError(
+        "This customer confirmation has already been completed."
+      );
+      return;
+    }
+
+    if (!scheduledDate || !timeWindow) {
+      setError(
+        "This appointment is missing a scheduled date or time window. Please contact us for assistance."
+      );
       return;
     }
 
@@ -338,11 +272,6 @@ useEffect(() => {
       return;
     }
 
-    if (!selectedDate || !selectedWindow) {
-      setError("Please select a date and time window.");
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       setError("");
@@ -350,10 +279,7 @@ useEffect(() => {
       const receipt = await generateAndUploadReceipt();
 
       await updateDoc(doc(db, "workOrders", workOrder.id), {
-        scheduledDate: selectedDate,
-        timeWindow: selectedWindow,
-        status: "Scheduled",
-
+        status: "Appointment Confirmed",
         customerAcceptedTerms: true,
         customerAcceptedWaiver: true,
         customerAcceptedAt: serverTimestamp(),
@@ -380,8 +306,6 @@ useEffect(() => {
 
         return {
           ...currentWorkOrder,
-          scheduledDate: selectedDate,
-          timeWindow: selectedWindow,
           customerAcceptedTerms: true,
           customerAcceptedWaiver: true,
           customerAcceptedAt: receipt.signedAt,
@@ -396,13 +320,16 @@ useEffect(() => {
         };
       });
     } catch (submitError: unknown) {
-      console.error("Unable to confirm installation:", submitError);
+      console.error(
+        "Unable to confirm installation:",
+        submitError
+      );
 
-      if (submitError instanceof Error) {
-        setError(`Unable to confirm installation: ${submitError.message}`);
-      } else {
-        setError("Unable to confirm installation due to an unknown error.");
-      }
+      setError(
+        submitError instanceof Error
+          ? `Unable to confirm installation: ${submitError.message}`
+          : "Unable to confirm installation due to an unknown error."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -428,7 +355,9 @@ useEffect(() => {
             Customer Confirmation Unavailable
           </h1>
 
-          <p className="mt-2 text-red-100">{error}</p>
+          <p className="mt-2 text-red-100">
+            {error}
+          </p>
         </div>
       </main>
     );
@@ -446,8 +375,9 @@ useEffect(() => {
                 </h1>
 
                 <p className="mt-2 text-slate-300">
-                  This customer confirmation has been completed. The details
-                  below are read-only and cannot be changed through this link.
+                  This customer confirmation has been completed. The
+                  details below are read-only and cannot be changed
+                  through this link.
                 </p>
               </div>
 
@@ -488,30 +418,21 @@ useEffect(() => {
 
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">
-                  Scheduled By
-                </p>
-                <p className="mt-1 text-white">
-                  {workOrder.scheduledBy === "customer"
-                    ? "Customer"
-                    : "Not available"}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">
                   Installation Date
                 </p>
                 <p className="mt-1 text-white">
-                  {formatInstallationDate(workOrder.scheduledDate)}
+                  {formatInstallationDate(
+                    workOrder.scheduledDate
+                  )}
                 </p>
               </div>
 
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">
-                  Time Window
+                  Appointment Window
                 </p>
                 <p className="mt-1 text-white">
-                  {workOrder.timeWindow || "Not selected"}
+                  {workOrder.timeWindow || "Not scheduled"}
                 </p>
               </div>
 
@@ -542,7 +463,8 @@ useEffect(() => {
                   Electronic Signature
                 </p>
                 <p className="mt-1 text-white">
-                  {workOrder.customerSignatureName || "Not provided"}
+                  {workOrder.customerSignatureName ||
+                    "Not provided"}
                 </p>
               </div>
 
@@ -551,7 +473,9 @@ useEffect(() => {
                   Signed
                 </p>
                 <p className="mt-1 text-white">
-                  {formatTimestamp(workOrder.customerSignedAt)}
+                  {formatTimestamp(
+                    workOrder.customerSignedAt
+                  )}
                 </p>
               </div>
 
@@ -560,7 +484,8 @@ useEffect(() => {
                   Confirmation Number
                 </p>
                 <p className="mt-1 text-white">
-                  {workOrder.customerConfirmationNumber || "Not available"}
+                  {workOrder.customerConfirmationNumber ||
+                    "Not available"}
                 </p>
               </div>
             </div>
@@ -587,7 +512,9 @@ useEffect(() => {
               {workOrder.customerConfirmationReceiptUrl && (
                 <>
                   <a
-                    href={workOrder.customerConfirmationReceiptUrl}
+                    href={
+                      workOrder.customerConfirmationReceiptUrl
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
@@ -596,8 +523,13 @@ useEffect(() => {
                   </a>
 
                   <a
-                    href={workOrder.customerConfirmationReceiptUrl}
-                    download={`Confirmation-${workOrder.customerConfirmationNumber || workOrder.id}.pdf`}
+                    href={
+                      workOrder.customerConfirmationReceiptUrl
+                    }
+                    download={`Confirmation-${
+                      workOrder.customerConfirmationNumber ||
+                      workOrder.id
+                    }.pdf`}
                     className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                   >
                     Download Receipt
@@ -635,11 +567,47 @@ useEffect(() => {
           </p>
 
           <p className="text-slate-300">
-            Service: {workOrder?.serviceTypeName || "Installation"}
+            Service:{" "}
+            {workOrder?.serviceTypeName || "Installation"}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+        <form
+          onSubmit={handleSubmit}
+          className="mt-6 space-y-6"
+        >
+          <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+            <h2 className="text-xl font-semibold">
+              Appointment
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Please review your scheduled appointment below.
+            </p>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Installation Date
+                </p>
+
+                <p className="mt-1 font-medium text-white">
+                  {formatInstallationDate(scheduledDate)}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-slate-700 bg-slate-950 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Appointment Window
+                </p>
+
+                <p className="mt-1 font-medium text-white">
+                  {timeWindow || "Not scheduled"}
+                </p>
+              </div>
+            </div>
+          </section>
+
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
             <h2 className="text-xl font-semibold">
               Terms & Conditions
@@ -647,7 +615,8 @@ useEffect(() => {
 
             <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950 p-4">
               <p className="text-sm text-slate-300">
-                Please review the Terms & Conditions before continuing.
+                Please review the Terms & Conditions before
+                continuing.
               </p>
 
               <a
@@ -677,7 +646,9 @@ useEffect(() => {
           </section>
 
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-xl font-semibold">Waiver</h2>
+            <h2 className="text-xl font-semibold">
+              Waiver
+            </h2>
 
             <div className="mt-3 rounded-lg border border-slate-700 bg-slate-950 p-4">
               <p className="text-sm text-slate-300">
@@ -716,8 +687,8 @@ useEffect(() => {
             </h2>
 
             <p className="mt-2 text-sm text-slate-300">
-              By typing your full name below, you acknowledge that this
-              serves as your electronic signature.
+              By typing your full name below, you acknowledge that
+              this serves as your electronic signature.
             </p>
 
             <label className="mt-4 block">
@@ -754,64 +725,6 @@ useEffect(() => {
             </label>
           </section>
 
-          <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-xl font-semibold">
-              Select Date & Time
-            </h2>
-
-            <label className="mt-4 block">
-              <span className="text-sm text-slate-300">
-                Installation Date
-              </span>
-
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => {
-                  setSelectedDate(event.target.value);
-                  setSelectedWindow("");
-                  setAvailableWindows([]);
-                }}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white"
-              />
-            </label>
-
-            <label className="mt-4 block">
-              <span className="text-sm text-slate-300">
-                Time Window
-              </span>
-
-              <select
-                value={selectedWindow}
-                onChange={(event) =>
-                  setSelectedWindow(event.target.value)
-                }
-                disabled={
-                  !selectedDate ||
-                  isLoadingAvailability ||
-                  availableWindows.length === 0
-                }
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="">
-                  {!selectedDate
-                    ? "Select a date first"
-                    : isLoadingAvailability
-                    ? "Checking availability..."
-                    : availableWindows.length === 0
-                    ? "No appointments available"
-                    : "Select a time window"}
-                </option>
-
-                {availableWindows.map((window) => (
-                  <option key={window} value={window}>
-                    {window}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </section>
-
           {error && (
             <div className="rounded-lg border border-red-500/40 bg-red-950/30 p-3 text-sm text-red-200">
               {error}
@@ -822,9 +735,8 @@ useEffect(() => {
             type="submit"
             disabled={
               isSubmitting ||
-              isLoadingAvailability ||
-              !selectedDate ||
-              !selectedWindow
+              !scheduledDate ||
+              !timeWindow
             }
             className="w-full rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
           >

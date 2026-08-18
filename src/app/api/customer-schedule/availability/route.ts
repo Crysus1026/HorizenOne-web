@@ -4,16 +4,10 @@ import {
   getWeekdayFromDate,
 } from "@/lib/scheduling";
 import { NextRequest, NextResponse } from "next/server";
+import { SCHEDULING_WINDOWS } from "@/types/technicianAvailability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const TIME_WINDOWS = [
-  "8:00 AM - 10:00 AM",
-  "10:00 AM - 12:00 PM",
-  "12:00 PM - 2:00 PM",
-  "2:00 PM - 4:00 PM",
-] as const;
 
 const BLOCKING_STATUSES = [
   "Scheduled",
@@ -290,14 +284,10 @@ export async function GET(request: NextRequest) {
      * 3. Is not already assigned during that window.
      */
 
-    const availableWindows = TIME_WINDOWS.filter(
-      (timeWindow) => {
-        const schedulingWindowId =
-          getSchedulingWindowId(timeWindow);
-
-        if (!schedulingWindowId) {
-          return false;
-        }
+    const availableWindows = SCHEDULING_WINDOWS.filter(
+      (window) => {
+        const schedulingWindowId = window.id;
+        const timeWindow = window.label;
 
         const bookedTechnicians =
           bookedTechniciansByWindow.get(timeWindow) ??
@@ -327,7 +317,7 @@ export async function GET(request: NextRequest) {
           }
         );
       }
-    );
+    ).map((window) => window.label);
 
     return NextResponse.json({
       availableWindows,

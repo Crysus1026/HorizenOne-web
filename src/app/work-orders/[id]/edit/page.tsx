@@ -18,7 +18,12 @@ import { db } from "@/lib/firebase";
 import {
   getSchedulingWindowId,
   getWeekdayFromDate,
+  normalizeSchedulingWindowIds,
 } from "@/lib/scheduling";
+
+import {
+  SCHEDULING_WINDOWS,
+} from "@/types/technicianAvailability";
 
 type WorkOrder = {
   workOrderNumber?: string;
@@ -335,8 +340,9 @@ async function evaluateTechnicianAvailability(
         return;
       }
 
-      const scheduledWindows =
-        availability.weeklySchedule?.[weekday] ?? [];
+      const scheduledWindows = normalizeSchedulingWindowIds(
+        availability.weeklySchedule?.[weekday] ?? []
+      );
 
       if (!scheduledWindows.includes(schedulingWindowId)) {
         conflicts[technician.id] =
@@ -634,7 +640,10 @@ if (!selectedCompletionTemplate) {
               <input
                 type="date"
                 value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
+                onChange={(e) => {
+                  setScheduledDate(e.target.value);
+                  setAssignedTechnicianId("");
+                }}
                 className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
               />
             </div>
@@ -645,14 +654,19 @@ if (!selectedCompletionTemplate) {
               </label>
               <select
                 value={timeWindow}
-                onChange={(e) => setTimeWindow(e.target.value)}
+                onChange={(e) => {
+                  setTimeWindow(e.target.value);
+                  setAssignedTechnicianId("");
+                }}
                 className="w-full rounded-lg border border-gray-800 bg-[#070B12] px-3 py-2 text-white outline-none focus:border-blue-500"
               >
                 <option value="">Select time window</option>
-                <option value="8:00 AM - 10:00 AM">8:00 AM - 10:00 AM</option>
-                <option value="10:00 AM - 12:00 PM">10:00 AM - 12:00 PM</option>
-                <option value="12:00 PM - 2:00 PM">12:00 PM - 2:00 PM</option>
-                <option value="2:00 PM - 4:00 PM">2:00 PM - 4:00 PM</option>
+
+                {SCHEDULING_WINDOWS.map((window) => (
+                  <option key={window.id} value={window.label}>
+                    {window.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

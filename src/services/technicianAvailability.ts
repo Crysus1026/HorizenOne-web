@@ -1,9 +1,11 @@
 import { auth, db } from "@/lib/firebase";
 import {
   DEFAULT_WEEKDAY_SCHEDULE,
+  type SchedulingWindowId,
   type TechnicianAvailability,
   type TechnicianAvailabilityException,
   type TechnicianWeeklySchedule,
+  type Weekday,
 } from "@/types/technicianAvailability";
 import {
   collection,
@@ -41,6 +43,60 @@ function availabilityDocumentId(
   return `${companyId}_${technicianId}`;
 }
 
+const LEGACY_WINDOW_MAP: Record<string, SchedulingWindowId[]> = {
+  "8-10": ["08:00-09:00", "09:00-10:00"],
+  "10-12": ["10:00-11:00", "11:00-12:00"],
+  "12-2": ["12:00-13:00", "13:00-14:00"],
+  "2-4": ["14:00-15:00", "15:00-16:00"],
+};
+
+const WEEKDAYS: Weekday[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+function normalizeWeeklySchedule(
+  weeklySchedule?: Record<string, string[]>,
+): TechnicianWeeklySchedule {
+  const normalizedSchedule = {
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+    sunday: [],
+  } as TechnicianWeeklySchedule;
+
+  for (const weekday of WEEKDAYS) {
+    const savedWindows = weeklySchedule?.[weekday] ?? [];
+    const normalizedWindows = new Set<SchedulingWindowId>();
+
+    for (const savedWindow of savedWindows) {
+      const legacyWindows = LEGACY_WINDOW_MAP[savedWindow];
+
+      if (legacyWindows) {
+        legacyWindows.forEach((windowId) => {
+          normalizedWindows.add(windowId);
+        });
+
+        continue;
+      }
+
+      normalizedWindows.add(savedWindow as SchedulingWindowId);
+    }
+
+    normalizedSchedule[weekday] = Array.from(normalizedWindows);
+  }
+
+  return normalizedSchedule;
+}
+
 export async function getTechnicianAvailability(
   companyId: string,
   technicianId: string,
@@ -55,9 +111,14 @@ export async function getTechnicianAvailability(
     return null;
   }
 
+  const data = snapshot.data();
+
   return {
     id: snapshot.id,
-    ...snapshot.data(),
+    ...data,
+    weeklySchedule: normalizeWeeklySchedule(
+      data.weeklySchedule as Record<string, string[]> | undefined,
+    ),
   } as TechnicianAvailability;
 }
 
