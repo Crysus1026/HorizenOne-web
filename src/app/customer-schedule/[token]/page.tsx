@@ -182,11 +182,6 @@ export default function CustomerSchedulePage() {
       20,
       75
     );
-    pdf.text(
-      `Time Window: ${timeWindow || "Not scheduled"}`,
-      20,
-      85
-    );
 
     pdf.setFontSize(13);
     pdf.text("Customer Acknowledgments", 20, 105);
